@@ -1,54 +1,61 @@
-# agent-harness
+# 数据爬虫与清洗 · 课程项目
 
-DeepSeek Harness 的**最小内核**实现，用于后续搭爬虫类 agent。
+一个仓库装下《数据爬虫与清洗》的全部实验，最终目标是搭一个可用的**爬虫 agent**。
 
-不是框架、不引第三方运行时依赖：只用 TypeScript 类型 + Node 内置能力（`fetch` / `node:http` / `node:test`），
-把「模型 → 工具 → 模型」这条闭环和它的全部失败路径跑通。
+根目录是**实验三**产出的 DeepSeek Harness 最小内核——后续爬虫 agent 的底座；历史实验按 `labs/labN-*` 归档，不改动、只做参考。
 
-## 一、core 的五个零件 + 一个循环
+## 一、实验索引
 
-```
-src/core/
-├─ types.ts            消息协议：system / user / assistant / tool
-├─ llm/
-│  ├─ types.ts         LLMClient 抽象（唯一的模型入口）
-│  ├─ openai-client.ts OpenAI 兼容实现（DeepSeek / vLLM / Ollama 通用）
-│  └─ scripted-client.ts  脚本模型，离线复现 + 单元测试
-├─ tools/
-│  ├─ types.ts         ToolDefinition / ToolContext / ToolResult
-│  ├─ registry.ts      注册、作用域准入、超时、错误收敛、输出截断
-│  └─ builtin/web.ts   fetch_url / extract_links / save_markdown
-├─ session/index.ts    消息流 + 事件日志 + fork
-├─ scope/index.ts      工具白名单、域名白名单、轮次/次数/超时预算
-├─ system-prompt/      按当前工具集与作用域动态拼提示词
-├─ agent-loop/         主循环（唯一控制流）
-└─ agent/              装配：llm + tools + session + scope
-```
+| 目录 | 实验 | 内容 | 状态 |
+| --- | --- | --- | --- |
+| `labs/lab2-ts-fetch/` | 实验二 | TypeScript 项目骨架 + Node 原生 fetch 抓取（真实网页 / JSON 接口 / 串行 vs 并发） | 已完成 |
+| 仓库根目录 | 实验三 | DeepSeek Harness core 最小实现：消息协议、工具执行、会话、作用域、agent 主循环 | 已完成 |
+| `labs/lab4-*` | 实验四 | 待补 | 进行中 |
 
-数据流只有一条：
+## 二、仓库结构
 
 ```
-user → session → loop ──▶ llm.chat(messages, tools)
-                    ▲              │
-                    │        tool_calls?
-                    │              │ yes
-                    └── tool message ◀── registry.invoke (scope → 超时 → 执行 → 截断)
-                                   │ no
-                                   ▼
-                              最终答复，循环结束
+.
+├─ src/                    ← 实验三：harness core（当前主线）
+│  ├─ core/
+│  │  ├─ types.ts          消息协议（system / user / assistant / tool）
+│  │  ├─ llm/              LLMClient 抽象 + OpenAI 兼容实现 + 离线脚本模型
+│  │  ├─ tools/            ToolRegistry + fetch_url / extract_links / save_markdown
+│  │  ├─ session/          消息流 + 事件日志 + fork
+│  │  ├─ scope/            工具白名单、域名白名单、轮次/次数/超时预算
+│  │  ├─ system-prompt/    按工具集与作用域动态拼提示词
+│  │  ├─ agent-loop/       主循环（唯一控制流）
+│  │  └─ agent/            装配
+│  ├─ demo/mock-site.ts    本地演示站点
+│  ├─ tests/core.test.ts   15 个用例
+│  └─ cli.ts               端到端演示入口
+├─ labs/
+│  └─ lab2-ts-fetch/       实验二归档（独立 npm 工程）
+├─ package.json
+└─ tsconfig.json
 ```
 
-## 二、四个刻意的设计决定
+## 三、实验三：Harness Core
 
-1. **错误也是消息**：未知工具、非法 JSON、超时、被 scope 拒绝，全部变成一条 `isError` 的 `tool` 消息，
-   而不是抛异常。模型因此有机会自我修正，进程也不会因为一次失败退出。
-2. **作用域前置**：`Scope` 在执行**之前**判定，被拒绝的调用不会产生任何副作用（不会发一次请求）。
-   `fetch_url` 还会在重定向后二次校验最终主机，避免 302 绕过白名单。
+不是框架、不引第三方运行时依赖：只用 TypeScript 类型 + Node 内置能力（`fetch` / `node:http` / `node:test`），把「模型 → 工具 → 模型」这条闭环和它的全部失败路径跑通。
+
+### 一次 run 的数据流
+
+```
+user ─► session.append(user) ─► loop ─► llm.chat(messages, tools)
+loop ─► assistant ─► 有 tool_calls ?
+  有 → scope 准入 → 执行工具 → 回填 tool 消息 → 回到 loop
+  无 → 返回最终答复 → session.end
+```
+
+### 四个刻意的设计决定
+
+1. **错误也是消息**：未知工具、非法 JSON、超时、被 scope 拒绝，全部变成一条 `isError` 的 `tool` 消息，模型因此有机会自我修正，进程也不会因为一次失败退出。
+2. **作用域前置**：`Scope` 在执行**之前**判定，被拒绝的调用不产生任何副作用；`fetch_url` 还会在重定向后二次校验最终主机，避免 302 绕过白名单。
 3. **消息流与事件日志分离**：`messages` 严格遵循协议给模型看；`events` 记录轮次、耗时、拒绝原因给人复盘。
-4. **超时必须靠 race**：只把 `AbortSignal` 传给工具是不够的 —— 一个卡死的工具不会理会 abort。
-   `registry.withTimeout` 用 `Promise.race` 把 abort 变成真正的拒绝。
+4. **超时必须靠 race**：只把 `AbortSignal` 传给工具是不够的——卡死的工具不会理会 abort，必须 `Promise.race` 把它变成真正的拒绝。
 
-## 三、运行
+### 运行
 
 ```bash
 npm install
@@ -68,19 +75,12 @@ npm run demo:live    # 真实模型：需要 DEEPSEEK_API_KEY（可选 DEEPSEEK_
 [   48ms] t4 tool.done  fetch_url ok 369 chars
 [   52ms] t5 tool.done  save_markdown ok 106 chars
 [   52ms] t6 session  end     status=completed
-
-status      : completed
-turns       : 6
-tool calls  : 5 (errors: 1)
-elapsed     : 52ms
 ```
 
-产物：`out/crawl-report.md`。
-
-## 四、换成自己的 agent
+### 换成自己的 agent
 
 ```ts
-import { Agent, Scope, webTools, OpenAICompatibleClient } from "./core";
+import { Agent, Scope, webTools, OpenAICompatibleClient } from "./src/core";
 
 const agent = new Agent({
   name: "my-crawler",
@@ -93,12 +93,28 @@ const agent = new Agent({
 const { result, session } = await agent.run("抓取 example.com 首页并总结");
 ```
 
-要加能力就加 `ToolDefinition`，要收边界就改 `Scope`，都不需要动 `agent-loop`。
+加能力就加 `ToolDefinition`，收边界就改 `Scope`，都不用动 `agent-loop`。
 
-## 五、明确没做的（留给后续实验）
+## 四、实验二：ts-fetch-lab（归档）
 
-- 流式输出 / 增量渲染
-- 上下文压缩（长会话裁剪历史消息）
-- 多 agent 编排与工具权限审批（human-in-the-loop）
-- robots.txt 与限速、去重队列
-- 持久化（会话落盘、断点续跑）
+独立的 npm 工程，进入目录自行安装后运行，不影响根目录：
+
+```bash
+cd labs/lab2-ts-fetch
+npm install
+npm run build && npm start
+```
+
+它验证了三件事：Node 18+ 内置 fetch 的请求生命周期（Promise 兑现只代表响应头到达）、4xx/5xx 不会 reject、以及串行 `for + await` 与 `Promise.all` 的耗时差异（1811ms vs 608ms，约 2.98×）。
+
+## 五、提交约定
+
+- **一个主题一个 commit**，message 用 `feat:` / `fix:` / `docs:` / `chore:` / `refactor:` 前缀，写清"改了什么、为什么"。
+- 新实验放 `labs/labN-<主题>/`，不要动根目录的主线代码；主线演进留在 `src/`。
+- 不提交 `node_modules/`、`dist/`、`out/`、`.env`——已在 `.gitignore` 中；API key 只从环境变量读。
+
+## 六、环境
+
+- Node.js ≥ 18（内置 fetch），实测 v22.22.2
+- TypeScript 5.6（根目录 devDependency，`npm run build` 用）
+- 真实模型：DeepSeek `deepseek-chat`（OpenAI 兼容协议），需 `DEEPSEEK_API_KEY`
