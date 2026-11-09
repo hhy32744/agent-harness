@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { Agent, Scope, ScriptedLLM, Session, ToolRegistry, runAgentLoop, say, webTools } from "../core";
+import { Scope, ScriptedLLM, Session, ToolRegistry, runAgent, runAgentLoop, say, webTools } from "../core";
 import type { ChatRequest, LLMClient, ToolDefinition } from "../core";
 import { startMockSite, type MockSite } from "../demo/mock-site";
 
@@ -197,16 +197,14 @@ test("session.fork 复制消息但互不影响", () => {
   assert.ok(child.events.some((e) => e.type === "session.fork"));
 });
 
-test("Agent 自动注入 system prompt，且能统计事件", async () => {
-  const agent = new Agent({
+test("runAgent 自动注入 system prompt，且能统计事件", async () => {
+  const { result, session } = await runAgent("你好", {
     role: "测试助手",
     llm: new ScriptedLLM([say("ok")]),
     tools: [echoTool()],
     scope: baseScope(),
   });
 
-  const result = await agent.run("你好");
-  const session = agent.session;
   assert.equal(result.status, "completed");
   assert.equal(result.text, "ok");
   const sys = session.messages[0]!;
@@ -214,6 +212,7 @@ test("Agent 自动注入 system prompt，且能统计事件", async () => {
   assert.match(sys.content, /可用工具/);
   assert.match(sys.content, /echo/);
   assert.ok(session.events.some((e) => e.type === "session.start"));
+  assert.ok(session.events.some((e) => e.type === "user.message"));
 });
 
 test("fetch_url 拒绝白名单外主机，且不出网", async () => {

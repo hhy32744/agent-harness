@@ -80,21 +80,22 @@ npm run demo:live    # 真实模型：需要 DEEPSEEK_API_KEY（可选 DEEPSEEK_
 ### 换成自己的 agent
 
 ```ts
-import { Agent, Scope, webTools, OpenAICompatibleClient } from "./src/core";
+import { runAgent, Scope, webTools, OpenAICompatibleClient } from "./src/core";
 
-const agent = new Agent({
+const { result, session } = await runAgent("抓取 example.com 首页并总结", {
   role: "网页信息抽取助手",
   llm: new OpenAICompatibleClient({ apiKey: process.env.DEEPSEEK_API_KEY! }),
   tools: webTools,
   scope: Scope.crawler(["example.com"]),
 });
 
-const result = await agent.run("抓取 example.com 首页并总结");
 console.log(result.status, result.turns, result.text);
-// 消息流和事件都在 agent.session 上：agent.session.messages / agent.session.events
+// 消息流和事件都在 session 上：session.messages / session.events
 ```
 
-Agent 这一层只有 70 行、没有任何分支：建会话、塞系统提示词、调 `runAgentLoop`。加能力就加 `ToolDefinition`，收边界就改 `Scope`，都不用动 `agent-loop`。
+`agent` 这一层只有一个函数、一个 `for` 都没有：建工具表 → 建会话 → 塞系统提示词 → 调 `runAgentLoop`。
+要控制会话生命周期（续跑、分支）就不用 `runAgent`，直接调底层的 `runAgentLoop`，它本来就接受一个现成的 `Session`。
+加能力就加 `ToolDefinition`，收边界就改 `Scope`，都不用动 `agent-loop`。
 
 ## 四、实验二：ts-fetch-lab（归档）
 

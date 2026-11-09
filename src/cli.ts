@@ -6,7 +6,7 @@
  * 同一个 Agent 直接换成真实 DeepSeek 模型，代码一行不改。
  */
 import { readFile } from "node:fs/promises";
-import { Agent, OpenAICompatibleClient, Scope, ScriptedLLM, say, webTools } from "./core";
+import { OpenAICompatibleClient, Scope, ScriptedLLM, runAgent, say, webTools } from "./core";
 import type { ChatRequest, LLMClient, SessionEvent } from "./core";
 import { startMockSite } from "./demo/mock-site";
 
@@ -184,7 +184,13 @@ async function main(): Promise<void> {
       })
     : buildScript(site.baseUrl);
 
-  const agent = new Agent({
+  console.log("=== agent-harness demo ===");
+  console.log(`node ${process.version} | llm=${llm.name} | target=${site.baseUrl}`);
+  console.log(`scope: tools=${scope.policy.allowedTools?.join(",")} hosts=${scope.policy.allowedHosts?.join(",")} maxTurns=${scope.policy.maxTurns}`);
+  console.log(`task: ${task}`);
+  console.log("");
+
+  const { result, session } = await runAgent(task, {
     name: "crawler-demo",
     role: "网页信息抽取助手",
     llm,
@@ -192,15 +198,6 @@ async function main(): Promise<void> {
     scope,
     onEvent: (e) => printEvent(e, t0),
   });
-
-  console.log("=== agent-harness demo ===");
-  console.log(`node ${process.version} | llm=${llm.name} | target=${site.baseUrl}`);
-  console.log(`scope: tools=${scope.policy.allowedTools?.join(",")} hosts=${scope.policy.allowedHosts?.join(",")} maxTurns=${scope.policy.maxTurns}`);
-  console.log(`task: ${task}`);
-  console.log("");
-
-  const result = await agent.run(task);
-  const session = agent.session;
   const elapsed = Date.now() - t0;
 
   console.log("");

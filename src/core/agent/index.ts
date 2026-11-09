@@ -1,8 +1,8 @@
 /**
- * Agent：core 的装配层，只干四件事——建工具表、建会话、塞系统提示词、调 loop。
+ * agent：core 的一行入口。
  *
- * 判断逻辑一律留在 agent-loop 里，这里不做任何分支。
- * 想换模型就换 llm，想收边界就换 scope，都不需要动这个文件。
+ * 只做四件事——建工具表、建会话、塞系统提示词、调 loop，然后返回结果。
+ * 没有类、没有状态、没有分支；要控制会话生命周期（续跑/分支）就直接用 runAgentLoop。
  */
 import { runAgentLoop, type LoopResult } from "../agent-loop";
 import type { LLMClient } from "../llm/types";
@@ -27,47 +27,36 @@ export interface AgentOptions {
   name?: string;
 }
 
-export class Agent {
-  readonly session = new Session();
-  readonly registry: ToolRegistry;
-  readonly scope: Scope;
-  private readonly llm: LLMClient;
-  private readonly onEvent?: (event: SessionEvent) => void;
+export interface AgentRun {
+  result: LoopResult;
+  /** 完整消息流与事件都在这里 */
+  session: Session;
+}
 
-  constructor(opts: AgentOptions) {
-    this.llm = opts.llm;
-    this.onEvent = opts.onEvent;
-    this.scope = opts.scope ?? new Scope();
-    this.registry = new ToolRegistry().register(...opts.tools);
+/** 跑一次完整任务：追加一条 user 消息，循环到模型不再调工具 */
+export async function runAgent(
+  input: string,
+  opts: AgentOptions,
+  signal?: AbortSignal,
+): Promise<AgentRun> {
+  const scope = opts.scope ?? new Scope();
+  const registry = new ToolRegistry().register(...opts.tools);
+  const session = new Session();
+  const tools = registry.specs();
 
-    this.session.append({
-      role: "system",
-      content:
-        opts.systemPrompt ??
-        buildSystemPrompt({
-          role: opts.role ?? "通用助手",
-          tools: this.registry.specs(),
-          scope: this.scope,
-        }),
-    });
-    this.session.record("session.start", {
-      agent: opts.name ?? "agent",
-      llm: this.llm.name,
-      tools: this.registry.specs().map((t) => t.name),
-    });
-  }
+  session.append({
+    role: "system",
+    content: opts.systemPrompt ?? buildSystemPrompt({ role: opts.role ?? "通用助手", tools, scope }),
+  });
+  session.record("session.start", {
+    agent: opts.name ?? "agent",
+    llm: opts.llm.name,
+    tools: tools.map((t) => t.name),
+  });
 
-  /** 追加一条 user 消息，然后跑到底；结果与会话都在对象上 */
-  run(input: string, signal?: AbortSignal): Promise<LoopResult> {
-    this.session.append({ role: "user", content: input });
-    this.session.record("user.message", { chars: input.length, preview: input.slice(0, 120) });
-    return runAgentLoop({
-      llm: this.llm,
-      registry: this.registry,
-      session: this.session,
-      scope: this.scope,
-      signal,
-      onEvent: this.onEvent,
-    });
-  }
+  session.append({ role: "user", content: input });
+  session.record("user.message", { chars: input.length, preview: input.slice(0, 120) });
+
+  const result = await runAgentLoop({ llm: opts.llm, registry, session, scope, signal, onEvent: opts.onEvent });
+  return { result, session };
 }
