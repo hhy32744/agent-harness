@@ -2,7 +2,7 @@
  * core 的公共出口。上层（CLI / 未来的爬虫 agent）只从 here import。
  */
 export { Agent } from "./agent";
-export type { AgentOptions, RunResult } from "./agent";
+export type { AgentOptions } from "./agent";
 export { runAgentLoop } from "./agent-loop";
 export type { LoopDeps, LoopResult, LoopStatus } from "./agent-loop";
 

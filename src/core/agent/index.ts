@@ -1,13 +1,8 @@
 /**
- * Agent：把 core 的五个零件装成一台能跑的东西。
+ * Agent：core 的装配层，只干四件事——建工具表、建会话、塞系统提示词、调 loop。
  *
- *   llm      决定下一步做什么
- *   registry 真的去做
- *   session  记住做过什么
- *   scope    限制能做什么
- *   loop     把上面四者按轮次串起来
- *
- * Agent 自己不加任何业务逻辑 —— 换模型、换工具、换策略，都只是换零件。
+ * 判断逻辑一律留在 agent-loop 里，这里不做任何分支。
+ * 想换模型就换 llm，想收边界就换 scope，都不需要动这个文件。
  */
 import { runAgentLoop, type LoopResult } from "../agent-loop";
 import type { LLMClient } from "../llm/types";
@@ -16,80 +11,63 @@ import { Session, type SessionEvent } from "../session";
 import { buildSystemPrompt } from "../system-prompt";
 import { ToolRegistry } from "../tools/registry";
 import type { ToolDefinition } from "../tools/types";
-import type { Message } from "../types";
 
 export interface AgentOptions {
-  name: string;
-  role: string;
   llm: LLMClient;
   tools: ToolDefinition[];
+  /** 不传则用默认策略（8 轮 / 16 次工具调用） */
   scope?: Scope;
-  /** 覆盖自动生成的系统提示词 */
+  /** 角色描述，用于自动生成系统提示词 */
+  role?: string;
+  /** 直接给一整份系统提示词；给了就不再自动拼 */
   systemPrompt?: string;
-  extraRules?: string[];
-  /** 已有会话，用于续跑 / 分支 */
-  session?: Session;
+  /** 事件回调，CLI 用来实时打印，测试用来断言 */
   onEvent?: (event: SessionEvent) => void;
-}
-
-export interface RunResult {
-  session: Session;
-  result: LoopResult;
+  /** 仅用于事件记录里标识是哪个 agent */
+  name?: string;
 }
 
 export class Agent {
-  readonly name: string;
-  readonly role: string;
-  readonly scope: Scope;
+  readonly session = new Session();
   readonly registry: ToolRegistry;
-  readonly session: Session;
-  readonly systemPrompt: string;
+  readonly scope: Scope;
   private readonly llm: LLMClient;
   private readonly onEvent?: (event: SessionEvent) => void;
 
   constructor(opts: AgentOptions) {
-    this.name = opts.name;
-    this.role = opts.role;
     this.llm = opts.llm;
+    this.onEvent = opts.onEvent;
     this.scope = opts.scope ?? new Scope();
     this.registry = new ToolRegistry().register(...opts.tools);
-    this.session = opts.session ?? new Session();
-    this.onEvent = opts.onEvent;
-    this.systemPrompt =
-      opts.systemPrompt ??
-      buildSystemPrompt({
-        role: opts.role,
-        tools: this.registry.specs(),
-        scope: this.scope,
-        extraRules: opts.extraRules,
-      });
 
-    if (!this.session.messages.some((m: Message) => m.role === "system")) {
-      this.session.append({ role: "system", content: this.systemPrompt });
-    }
+    this.session.append({
+      role: "system",
+      content:
+        opts.systemPrompt ??
+        buildSystemPrompt({
+          role: opts.role ?? "通用助手",
+          tools: this.registry.specs(),
+          scope: this.scope,
+        }),
+    });
     this.session.record("session.start", {
-      agent: this.name,
+      agent: opts.name ?? "agent",
       llm: this.llm.name,
       tools: this.registry.specs().map((t) => t.name),
-      maxTurns: this.scope.policy.maxTurns,
-      maxToolCalls: this.scope.policy.maxToolCalls,
     });
   }
 
-  /** 一次 run = 追加一条 user 消息 + 跑到底 */
-  async run(input: string, opts: { signal?: AbortSignal } = {}): Promise<RunResult> {
+  /** 追加一条 user 消息，然后跑到底；结果与会话都在对象上 */
+  run(input: string, signal?: AbortSignal): Promise<LoopResult> {
     this.session.append({ role: "user", content: input });
     this.session.record("user.message", { chars: input.length, preview: input.slice(0, 120) });
-
-    const result = await runAgentLoop({
+    return runAgentLoop({
       llm: this.llm,
       registry: this.registry,
       session: this.session,
       scope: this.scope,
-      signal: opts.signal,
+      signal,
       onEvent: this.onEvent,
     });
-
-    return { session: this.session, result };
   }
 }

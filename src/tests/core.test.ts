@@ -199,15 +199,16 @@ test("session.fork 复制消息但互不影响", () => {
 
 test("Agent 自动注入 system prompt，且能统计事件", async () => {
   const agent = new Agent({
-    name: "t",
     role: "测试助手",
     llm: new ScriptedLLM([say("ok")]),
     tools: [echoTool()],
     scope: baseScope(),
   });
 
-  const { result, session } = await agent.run("你好");
+  const result = await agent.run("你好");
+  const session = agent.session;
   assert.equal(result.status, "completed");
+  assert.equal(result.text, "ok");
   const sys = session.messages[0]!;
   assert.equal(sys.role, "system");
   assert.match(sys.content, /可用工具/);

@@ -190,7 +190,6 @@ async function main(): Promise<void> {
     llm,
     tools: webTools,
     scope,
-    extraRules: ["最终答复用编号列表，逐条说明做了什么、拿到了什么。"],
     onEvent: (e) => printEvent(e, t0),
   });
 
@@ -200,7 +199,8 @@ async function main(): Promise<void> {
   console.log(`task: ${task}`);
   console.log("");
 
-  const { result, session } = await agent.run(task);
+  const result = await agent.run(task);
+  const session = agent.session;
   const elapsed = Date.now() - t0;
 
   console.log("");

@@ -83,17 +83,18 @@ npm run demo:live    # 真实模型：需要 DEEPSEEK_API_KEY（可选 DEEPSEEK_
 import { Agent, Scope, webTools, OpenAICompatibleClient } from "./src/core";
 
 const agent = new Agent({
-  name: "my-crawler",
   role: "网页信息抽取助手",
   llm: new OpenAICompatibleClient({ apiKey: process.env.DEEPSEEK_API_KEY! }),
   tools: webTools,
   scope: Scope.crawler(["example.com"]),
 });
 
-const { result, session } = await agent.run("抓取 example.com 首页并总结");
+const result = await agent.run("抓取 example.com 首页并总结");
+console.log(result.status, result.turns, result.text);
+// 消息流和事件都在 agent.session 上：agent.session.messages / agent.session.events
 ```
 
-加能力就加 `ToolDefinition`，收边界就改 `Scope`，都不用动 `agent-loop`。
+Agent 这一层只有 70 行、没有任何分支：建会话、塞系统提示词、调 `runAgentLoop`。加能力就加 `ToolDefinition`，收边界就改 `Scope`，都不用动 `agent-loop`。
 
 ## 四、实验二：ts-fetch-lab（归档）
 
