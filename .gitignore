@@ -1,7 +1,13 @@
-# 依赖与构建产物
+# 依赖与编译产物
 node_modules/
-dist/
+build/
+
+# demo 运行时产出（save_markdown 写入目录）
 out/
+
+# 测试与覆盖率
+coverage/
+*.tsbuildinfo
 
 # 日志与临时文件
 *.log

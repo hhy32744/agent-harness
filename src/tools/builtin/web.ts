@@ -1,13 +1,13 @@
 /**
  * 爬虫场景的三个基础工具。
  * 刻意做小：抓页面、抽链接、落盘。复杂能力（渲染、分页、去重）
- * 应该在 agent 层组合，而不是继续往 core 的工具里堆。
+ * 应该在 agent 层组合，而不是继续往内核的工具里堆。
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import type { ToolDefinition } from "../types";
 
-const USER_AGENT = "agent-harness/0.1 (+crawler lab)";
+const USER_AGENT = "agent-harness/0.1 (+crawler agent)";
 const MAX_BYTES = 512 * 1024;
 
 function str(input: Record<string, unknown>, key: string): string {
@@ -31,7 +31,7 @@ export const fetchUrlTool: ToolDefinition = {
     type: "object",
     properties: {
       url: { type: "string", description: "绝对 URL，例如 https://example.com/" },
-      maxBytes: { type: "number", description: "最多读取的字节数，默认 524288" },
+      maxBytes: { type: "number", description: "回填给模型的正文最大字节数，超出会截断，默认 524288" },
     },
     required: ["url"],
     additionalProperties: false,

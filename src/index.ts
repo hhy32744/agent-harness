@@ -1,5 +1,5 @@
 /**
- * core 的公共出口。上层（CLI / 未来的爬虫 agent）只从 here import。
+ * 内核的公共出口。上层（CLI / 爬虫 agent）只从这里 import。
  */
 export { runAgent } from "./agent";
 export type { AgentOptions, AgentRun } from "./agent";

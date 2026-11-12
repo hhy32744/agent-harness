@@ -6,9 +6,10 @@
  * 同一个 Agent 直接换成真实 DeepSeek 模型，代码一行不改。
  */
 import { readFile } from "node:fs/promises";
-import { OpenAICompatibleClient, Scope, ScriptedLLM, runAgent, say, webTools } from "./core";
-import type { ChatRequest, LLMClient, SessionEvent } from "./core";
-import { startMockSite } from "./demo/mock-site";
+import { join } from "node:path";
+import { OpenAICompatibleClient, Scope, ScriptedLLM, runAgent, say, webTools } from "../src";
+import type { ChatRequest, LLMClient, SessionEvent } from "../src";
+import { startMockSite } from "./mock-site";
 
 interface FetchPayload {
   url: string;
@@ -169,64 +170,70 @@ function printEvent(event: SessionEvent, t0: number): void {
 
 async function main(): Promise<void> {
   const live = process.argv.includes("--live");
+  // 先在启动本地站点之前校验环境变量：否则异常路径下 server 还在监听，进程不会退出
+  const apiKey = live ? requireEnv("DEEPSEEK_API_KEY") : undefined;
   const task =
     "抓取实验室站点首页，列出入口链接，挑一篇正文抓下来，整理成 Markdown 保存到 out/ 目录，最后给出摘要。";
 
   const site = await startMockSite();
-  const scope = Scope.crawler([new URL(site.baseUrl).hostname], { maxTurns: 8, maxToolCalls: 12 });
-  const t0 = Date.now();
-
-  const llm: LLMClient = live
-    ? new OpenAICompatibleClient({
-        apiKey: requireEnv("DEEPSEEK_API_KEY"),
-        baseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
-        model: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
-      })
-    : buildScript(site.baseUrl);
-
-  console.log("=== agent-harness demo ===");
-  console.log(`node ${process.version} | llm=${llm.name} | target=${site.baseUrl}`);
-  console.log(`scope: tools=${scope.policy.allowedTools?.join(",")} hosts=${scope.policy.allowedHosts?.join(",")} maxTurns=${scope.policy.maxTurns}`);
-  console.log(`task: ${task}`);
-  console.log("");
-
-  const { result, session } = await runAgent(task, {
-    name: "crawler-demo",
-    role: "网页信息抽取助手",
-    llm,
-    tools: webTools,
-    scope,
-    onEvent: (e) => printEvent(e, t0),
-  });
-  const elapsed = Date.now() - t0;
-
-  console.log("");
-  console.log("=== result ===");
-  console.log(result.text);
-  console.log("");
-  console.log("--- 关键指标 ---");
-  console.log(`status      : ${result.status}`);
-  console.log(`turns       : ${result.turns}`);
-  console.log(`tool calls  : ${result.toolCalls} (errors: ${session.snapshot().stats.toolErrors})`);
-  console.log(`messages    : ${session.messages.length}`);
-  console.log(`events      : ${session.events.length}`);
-  console.log(`elapsed     : ${elapsed}ms`);
-  if (result.usage.totalTokens > 0) {
-    console.log(`tokens      : prompt=${result.usage.promptTokens} completion=${result.usage.completionTokens} total=${result.usage.totalTokens}`);
-  }
-
-  const saved = `${process.cwd()}/out/crawl-report.md`;
   try {
-    const text = await readFile(saved, "utf8");
-    console.log(`output      : ${saved} (${Buffer.byteLength(text)} 字节)`);
-    console.log("--- out/crawl-report.md ---");
-    console.log(text);
-  } catch {
-    console.log(`output      : ${saved} 未生成`);
-  }
+    const scope = Scope.crawler([new URL(site.baseUrl).hostname], { maxTurns: 8, maxToolCalls: 12 });
+    const t0 = Date.now();
 
-  await site.close();
-  if (result.status !== "completed") process.exitCode = 1;
+    const llm: LLMClient = live
+      ? new OpenAICompatibleClient({
+          apiKey: apiKey!,
+          baseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
+          model: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
+        })
+      : buildScript(site.baseUrl);
+
+    console.log("=== agent-harness demo ===");
+    console.log(`node ${process.version} | llm=${llm.name} | target=${site.baseUrl}`);
+    console.log(`scope: tools=${scope.policy.allowedTools?.join(",")} hosts=${scope.policy.allowedHosts?.join(",")} maxTurns=${scope.policy.maxTurns}`);
+    console.log(`task: ${task}`);
+    console.log("");
+
+    const { result, session } = await runAgent(task, {
+      name: "crawler-demo",
+      role: "网页信息抽取助手",
+      llm,
+      tools: webTools,
+      scope,
+      onEvent: (e) => printEvent(e, t0),
+    });
+    const elapsed = Date.now() - t0;
+
+    console.log("");
+    console.log("=== result ===");
+    console.log(result.text);
+    console.log("");
+    console.log("--- 关键指标 ---");
+    console.log(`status      : ${result.status}`);
+    console.log(`turns       : ${result.turns}`);
+    console.log(`tool calls  : ${result.toolCalls} (errors: ${session.snapshot().stats.toolErrors})`);
+    console.log(`messages    : ${session.messages.length}`);
+    console.log(`events      : ${session.events.length}`);
+    console.log(`elapsed     : ${elapsed}ms`);
+    if (result.usage.totalTokens > 0) {
+      console.log(`tokens      : prompt=${result.usage.promptTokens} completion=${result.usage.completionTokens} total=${result.usage.totalTokens}`);
+    }
+
+    const saved = join(process.cwd(), "out", "crawl-report.md");
+    try {
+      const text = await readFile(saved, "utf8");
+      console.log(`output      : ${saved} (${Buffer.byteLength(text)} 字节)`);
+      console.log("--- out/crawl-report.md ---");
+      console.log(text);
+    } catch {
+      console.log(`output      : ${saved} 未生成`);
+    }
+
+    if (result.status !== "completed") process.exitCode = 1;
+  } finally {
+    // 无论成功、失败还是外部中断，都要把本地站点关掉
+    await site.close();
+  }
 }
 
 function requireEnv(key: string): string {

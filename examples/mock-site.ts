@@ -3,7 +3,7 @@
  * 起在随机端口上，避免和外网/其他进程冲突，同时让 demo 不依赖网络。
  */
 import { createServer, type Server } from "node:http";
-import { AddressInfo } from "node:net";
+import type { AddressInfo } from "node:net";
 
 const PAGES: Record<string, { title: string; body: string }> = {
   "/": {
@@ -61,6 +61,12 @@ export async function startMockSite(): Promise<MockSite> {
 
   return {
     baseUrl: `http://127.0.0.1:${port}`,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise<void>((resolve) => {
+        // undici 的 keep-alive 连接会让 server.close() 一直等，先强制断开再关。
+        // 该方法在 Node 18.2+ 才有，做兼容判断以支持更早的 18.x。
+        if (typeof server.closeAllConnections === "function") server.closeAllConnections();
+        server.close(() => resolve());
+      }),
   };
 }

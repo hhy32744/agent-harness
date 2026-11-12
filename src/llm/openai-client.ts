@@ -147,8 +147,11 @@ function parseToolCall(raw: WireToolCall): ToolCall {
   let args: Record<string, unknown> = {};
   let rawArgs: string | undefined;
   try {
-    const parsed = JSON.parse(argText);
-    args = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+    const parsed: unknown = JSON.parse(argText);
+    // 合法 JSON 不等于合法参数：数组 / null / 数字都不能当成参数对象交给工具
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      args = parsed as Record<string, unknown>;
+    }
   } catch {
     // 非法 JSON 不在这里抛错：交给 loop 把错误回填给模型，让它自己修参数
     rawArgs = argText;

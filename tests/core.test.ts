@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { Scope, ScriptedLLM, Session, ToolRegistry, runAgent, runAgentLoop, say, webTools } from "../core";
-import type { ChatRequest, LLMClient, ToolDefinition } from "../core";
-import { startMockSite, type MockSite } from "../demo/mock-site";
+import { OpenAICompatibleClient, Scope, ScriptedLLM, Session, ToolRegistry, runAgent, runAgentLoop, say, webTools } from "../src";
+import type { ChatRequest, LLMClient, ToolDefinition } from "../src";
+import { startMockSite, type MockSite } from "../examples/mock-site";
 
 let site: MockSite | undefined;
 
@@ -301,4 +301,91 @@ test("ScriptedLLM 的请求里能拿到完整消息流", async () => {
   ]);
   await runAgentLoop({ llm, registry, session, scope: baseScope() });
   assert.deepEqual(seen, ["user"]);
+});
+
+// ===== 真实模型适配器：注入 fetch 做离线验证，全程不发外网 =====
+
+function wireResponse(body: unknown, init: ResponseInit = {}): Response {
+  return new Response(typeof body === "string" ? body : JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+}
+
+function toolCallReply(argumentsText: string): Response {
+  return wireResponse({
+    choices: [
+      {
+        message: {
+          content: "",
+          tool_calls: [{ id: "c1", type: "function", function: { name: "echo", arguments: argumentsText } }],
+        },
+      },
+    ],
+  });
+}
+
+test("OpenAICompatibleClient 端点拼接正确，并能解析 tool_calls 与 usage", async () => {
+  let seenUrl = "";
+  const client = new OpenAICompatibleClient({
+    apiKey: "test-key",
+    baseUrl: "https://api.example.test/v1/",
+    fetchImpl: async (url) => {
+      seenUrl = String(url);
+      return wireResponse({
+        choices: [
+          {
+            message: {
+              content: "",
+              tool_calls: [
+                { id: "c1", type: "function", function: { name: "echo", arguments: '{"text":"hi"}' } },
+              ],
+            },
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+      });
+    },
+  });
+
+  const msg = await client.chat({ messages: [], tools: [] });
+
+  assert.equal(seenUrl, "https://api.example.test/v1/chat/completions");
+  assert.equal(msg.toolCalls.length, 1);
+  assert.equal(msg.toolCalls[0]!.name, "echo");
+  assert.deepEqual(msg.toolCalls[0]!.args, { text: "hi" });
+  assert.equal(msg.usage?.totalTokens, 15);
+});
+
+test("模型给出数组形式的 arguments 时不会被当成参数对象", async () => {
+  const client = new OpenAICompatibleClient({
+    apiKey: "test-key",
+    fetchImpl: async () => toolCallReply("[1,2]"),
+  });
+
+  const msg = await client.chat({ messages: [], tools: [] });
+
+  assert.equal(Array.isArray(msg.toolCalls[0]!.args), false);
+  assert.deepEqual(msg.toolCalls[0]!.args, {});
+});
+
+test("模型给出非法 JSON 参数时保留原文，交给 loop 回填可读错误", async () => {
+  const client = new OpenAICompatibleClient({
+    apiKey: "test-key",
+    fetchImpl: async () => toolCallReply('{"text": "oops"'),
+  });
+
+  const msg = await client.chat({ messages: [], tools: [] });
+
+  assert.equal(msg.toolCalls[0]!.rawArgs, '{"text": "oops"');
+});
+
+test("LLM 返回非 2xx 时错误里带上状态码与响应体", async () => {
+  const client = new OpenAICompatibleClient({
+    apiKey: "test-key",
+    fetchImpl: async () =>
+      wireResponse("rate limited", { status: 429, statusText: "Too Many Requests" }),
+  });
+
+  await assert.rejects(() => client.chat({ messages: [], tools: [] }), /429.*rate limited/);
 });

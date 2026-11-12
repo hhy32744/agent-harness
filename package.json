@@ -2,18 +2,24 @@
   "name": "agent-harness",
   "version": "0.1.0",
   "private": true,
-  "description": "DeepSeek Harness 最小内核：LLM + 工具 + 会话 + 作用域 + agent loop",
-  "main": "dist/cli.js",
+  "description": "由大模型驱动、可约束的网页爬取 Agent 内核：LLM + 工具 + 会话 + 作用域 + agent loop",
+  "main": "build/src/index.js",
+  "types": "build/src/index.d.ts",
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test dist/tests/core.test.js",
-    "demo": "tsc && node dist/cli.js",
-    "demo:live": "tsc && node dist/cli.js --live"
+    "verify": "npm run typecheck && npm test",
+    "test": "tsc && node --test build/tests/core.test.js",
+    "demo": "tsc && node build/examples/cli.js",
+    "demo:fetch": "tsc && node build/examples/fetch-basics.js",
+    "demo:live": "tsc && node build/examples/cli.js --live"
   },
   "keywords": ["agent", "harness", "deepseek", "crawler"],
   "author": "hhy",
   "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "typescript": "^5.6.3"
