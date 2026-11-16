@@ -1,13 +1,14 @@
 # 命令行：`dsh`
 
-> 内核是库，`dsh` 是它的执行入口。本文讲四条命令各自解决什么问题、参数怎么传、以及几个"为什么这样设计"的取舍。
+> 内核是库，`dsh` 是它的执行入口。本文讲五条命令各自解决什么问题、参数怎么传、以及几个"为什么这样设计"的取舍。
 > 只想跑起来，看 [README 快速开始](../README.md#快速开始)。
 
-## 1. 四条命令
+## 1. 五条命令
 
 ```bash
 dsh                                    # 交互式聊天（多轮，同一会话保留上下文）
 dsh prompt "抓取 example.com 首页并总结"  # 非交互任务，跑完打印结果
+dsh read https://example.com/           # 直接读一个网页（不调模型，不需要 key）
 dsh doctor                             # 环境与配置检查
 dsh remote 4090 --prompt "查看 GPU 状态"  # 在远端机器上跑同一条 prompt，结果带回来
 ```
@@ -50,7 +51,40 @@ dsh> 搜一下 4090 的显存规格
 
 Ctrl+D（EOF）同样退出。任务跑到一半出错的，只影响那一轮：错误以 `x 本轮失败：…` 打印，会话继续可用。
 
-## 3. `dsh prompt`：一次性任务
+## 3. `dsh read`：不经过模型读一个网页
+
+```bash
+dsh read https://example.com/                 # 打印标题 + 正文
+dsh read https://example.com/ --raw           # 原始 HTML，不做正文提取
+dsh read https://example.com/ --full --max-bytes 65536
+dsh read https://example.com/ --json          # 机器可读，字段与下面 ReadResult 一致
+```
+
+输出是这样的：
+
+```
+https://example.com/  →  200 text/html; charset=utf-8 | 577 B · 717ms
+标题：Example Domain
+
+────────────────────────────────────────────────────────────
+
+This domain is for use in documentation examples without needing permission.
+```
+
+**为什么单独有这么一条命令。** agent 读网页要过大模型，没配 key 就什么都演示不了；但"能读网页"是内核能力，跟有没有 key 无关。所以 `read` 不另写一份抓取实现，而是走 `ToolRegistry.invoke` 调用**同一个** `fetch_url` —— 作用域校验、超时收敛、错误包装的行为与 agent 里完全一致。换句话说：`dsh read` 能看到什么，agent 就能看到什么。
+
+| 参数 | 说明 |
+| --- | --- |
+| `--raw` | 输出原始 HTML，不做正文提取 |
+| `--full` | 不截断正文（默认只显示前 4000 字符） |
+| `--max-bytes <n>` | 最多读多少字节，默认 262144，硬上限 524288 |
+| `--allow-host <hosts>` | 与 agent 同一套主机白名单；不在名单内直接拒绝 |
+
+正文提取（`htmlToText`）刻意不引第三方解析库，只做三件事：丢掉 `script` / `style` / 注释、块级标签断行、解 HTML 实体。精确抽取结构化字段交给模型，命令行只负责"把网页变成人能读的文本"。这个取舍换来的是**零依赖 + 可单测**：`tests/cli.test.ts` 里既有纯字符串用例，也有一条起真实 HTTP 服务、走真实 socket 的用例。
+
+退出码：2xx → 0；非 2xx、被白名单拒绝、网络错误 → 1；参数用法错误 → 2。
+
+## 4. `dsh prompt`：一次性任务
 
 ```bash
 dsh prompt "搜索 agent 框架的最新进展，挑 3 条总结" --max-turns 6
@@ -61,7 +95,7 @@ dsh prompt "把 example.com 的入口链接抓下来" --allow-host example.com -
 - `--json` 输出稳定结构（`status / text / turns / toolCalls / usage / elapsedMs / sessionId / error`），便于上层解析。
 - 退出码：`completed` → 0；`max_turns` / `tool_budget` / `error` → 1；用法错误或缺少密钥 → 2。
 
-## 4. `dsh doctor`：先把环境说清楚
+## 5. `dsh doctor`：先把环境说清楚
 
 ```
 [ok  ] Node 版本：v22.22.2（要求 >= 18）
@@ -91,7 +125,7 @@ dsh prompt "把 example.com 的入口链接抓下来" --allow-host example.com -
 
 **为什么缺密钥只是 warn 而不是 fail**：CI 里没有密钥，`dsh doctor` 要能当冒烟检查跑。要把它当门禁时加 `--strict`，警告也会返回非 0。
 
-## 5. `dsh remote`：借另一台机器跑
+## 6. `dsh remote`：借另一台机器跑
 
 ```bash
 dsh remote 4090 --prompt "查看 GPU 占用并汇总"     # 远端跑一次，输出流回本地
@@ -111,7 +145,7 @@ ssh -- <host> 'dsh prompt ... --allow-host ...'
 
 > 之所以不用"远端 agent 服务 + HTTP 回传"：那需要一个常驻进程、一套鉴权和版本兼容；而 `ssh host cmd` 已经解决了认证与传输，运维成本最低。
 
-## 6. 参数表
+## 7. 参数表
 
 | 参数 | 适用 | 说明 |
 | --- | --- | --- |
@@ -121,11 +155,14 @@ ssh -- <host> 'dsh prompt ... --allow-host ...'
 | `--tools <names>` | 全部 | 默认 `web_search,fetch_url,extract_links,save_markdown` |
 | `--max-turns <n>` | 全部 | agent 最大轮次，默认 8 |
 | `--max-tool-calls <n>` | 全部 | 单次任务工具调用上限，默认 16 |
-| `--json` | prompt / doctor | 机器可读输出 |
+| `--json` | prompt / read / doctor | 机器可读输出 |
 | `--quiet` | 全部 | 不打印过程事件，只给结果 |
 | `--strict` | doctor | 警告也返回非 0 |
+| `--raw` | read | 输出原始 HTML |
+| `--full` | read | 不截断正文 |
+| `--max-bytes <n>` | read | 读取字节上限，默认 262144 |
 
-## 7. 环境变量
+## 8. 环境变量
 
 | 变量 | 用途 | 默认 |
 | --- | --- | --- |
@@ -137,7 +174,7 @@ ssh -- <host> 'dsh prompt ... --allow-host ...'
 
 优先级：**命令行 > `DSH_*` > `DEEPSEEK_*` > 内置默认**。默认值只写在 `src/cli/config.ts` 一处，避免"doctor 检查的"和"实际跑的"不一致。
 
-## 8. `web_search` 为什么默认用必应
+## 9. `web_search` 为什么默认用必应
 
 | 端点 | 结构 | 可达性 |
 | --- | --- | --- |
@@ -154,15 +191,15 @@ DSH_SEARCH_ENDPOINT="https://html.duckduckgo.com/html/" dsh prompt "搜点什么
 
 与作用域的关系需要说清楚：**搜索请求发往固定端点，URL 不由模型控制，因此不走抓取主机白名单**；但 `web_search` 本身仍受工具白名单约束（不想要联网搜索就从 `--tools` 里去掉它）；搜索结果里的页面再用 `fetch_url` 抓时，照常受 `--allow-host` 限制。
 
-## 9. 退出码
+## 10. 退出码
 
 | 码 | 含义 |
 | --- | --- |
-| 0 | 成功（`doctor` 无 fail；`--strict` 时无 warn） |
-| 1 | 任务未完成（`max_turns` / `tool_budget` / `error`）或 doctor 有 fail |
-| 2 | 用法错误：未知子命令、缺任务文本、未知参数、缺少模型密钥 |
+| 0 | 成功（`doctor` 无 fail；`--strict` 时无 warn；`read` 拿到 2xx） |
+| 1 | 任务未完成（`max_turns` / `tool_budget` / `error`）；doctor 有 fail；`read` 非 2xx 或被白名单拒绝 |
+| 2 | 用法错误：未知子命令、缺任务文本、缺 URL、未知参数、缺少模型密钥 |
 
-## 10. 已知限制
+## 11. 已知限制
 
 - 交互模式没有流式输出：模型整段返回后再打印（`OpenAICompatibleClient` 目前是 `stream: false`）。
 - 会话不持久化：`dsh` 退出后上下文即丢弃；续跑要自己用 `runAgentLoop` + 现成 `Session`。

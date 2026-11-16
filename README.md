@@ -6,7 +6,7 @@
 
 一个由大模型驱动、可约束的网页爬取 Agent。当前交付的是它的最小可运行内核：消息协议、工具执行、会话记录、作用域与 agent 主循环。不依赖框架、不引第三方运行时库，只用 TypeScript + Node 内置能力。
 
-`Node ≥ 18` · `TypeScript ^5.6` · `零第三方运行时依赖` · `40 / 40 测试通过` · `ISC`
+`Node ≥ 18` · `TypeScript ^5.6` · `零第三方运行时依赖` · `47 / 47 测试通过` · `ISC`
 
 ---
 
@@ -56,7 +56,7 @@
 git clone git@github.com:hhy32744/agent-harness.git
 cd agent-harness
 npm ci
-npm test          # 40 个用例，覆盖主循环全部退出路径、真实模型适配器与 CLI
+npm test          # 47 个用例，覆盖主循环全部退出路径、真实模型适配器、CLI 与网络读取
 npm run demo      # 离线端到端闭环：脚本模型 + 本地 mock 站点
 ```
 
@@ -84,7 +84,7 @@ DEEPSEEK_API_KEY=sk-xxx npm run demo:live
 | `npm run build` | `tsc` 编译到 `build/` |
 | `npm run typecheck` | 只做类型检查，不产出文件 |
 | `npm run verify` | 类型检查 + 全量测试 |
-| `npm test` | 编译 + 运行 40 个用例 |
+| `npm test` | 编译 + 运行 47 个用例 |
 | `npm run dsh` | 编译后启动 `dsh`（不带参数即交互聊天） |
 | `npm run doctor` | 编译后跑一次环境与配置检查 |
 | `npm run demo` | 离线端到端闭环 |
@@ -113,11 +113,12 @@ DEEPSEEK_API_KEY=sk-xxx npm run demo:live
 
 ## 命令行 dsh
 
-内核只有 API，`dsh` 是把内核接到人手上的那一层。四条命令各管一件事：
+内核只有 API，`dsh` 是把内核接到人手上的那一层。五条命令各管一件事：
 
 ```bash
 dsh                                     # 交互式聊天：多轮，同一会话保留上下文
 dsh prompt "抓取 example.com 首页并总结"   # 非交互任务：跑完打印结果，可进脚本 / CI
+dsh read https://example.com/           # 直接读网页：不调模型、不需要 key，验网络读取
 dsh doctor                              # 环境自检：Node / 密钥 / 端点 / 目录 / 工具 / SSH
 dsh remote 4090 --prompt "查看 GPU 状态"  # 远端跑同一个 prompt，输出流回本地
 ```
@@ -163,12 +164,12 @@ agent-harness/
 │  ├─ system-prompt/           按工具集与作用域动态拼提示词
 │  ├─ agent-loop/              主循环（唯一控制流）
 │  ├─ agent/                   装配成 runAgent
-│  └─ cli/                     命令行 dsh：args / config / chat / prompt / doctor / remote
+│  └─ cli/                     命令行 dsh：args / config / chat / prompt / read / doctor / remote
 ├─ examples/                   ← 可运行示例
 │  ├─ cli.ts                   端到端闭环（demo / demo:live）
 │  ├─ mock-site.ts             本地 mock 站点
 │  └─ fetch-basics.ts          底层抓取能力自检（demo:fetch）
-├─ tests/                       ← 40 个用例（core 19 + cli 21）
+├─ tests/                       ← 47 个用例（core 19 + cli 28）
 ├─ scripts/setup.sh            ← Linux 一键装环境与自检
 ├─ docs/                       ← 架构、命令行、底层能力、开发约定
 ├─ .github/workflows/ci.yml    ← 多平台自动验证
@@ -207,7 +208,7 @@ flowchart LR
 | 系统提示词 | `src/system-prompt/` | 按当前工具集与作用域动态拼装 |
 | 主循环 | `src/agent-loop/` | **唯一控制流**：`llm.chat → tool_calls → 执行 → 回填 → 再问模型` |
 | 装配 | `src/agent/` | `runAgent`：建工具表、建会话、塞提示词、调主循环 |
-| 命令行 | `src/cli/` | `dsh` 四个子命令；只做参数、配置、渲染与分派，不含业务逻辑 |
+| 命令行 | `src/cli/` | `dsh` 五个子命令；只做参数、配置、渲染与分派，不含业务逻辑 |
 | 公共出口 | `src/index.ts` | 上层唯一 import 入口 |
 
 ## 四个设计决定
@@ -227,7 +228,7 @@ flowchart LR
 
 | 状态 | 能力 |
 | --- | --- |
-| ✅ 已跑通 | 消息协议、DeepSeek 与离线脚本模型、工具注册与四个内置工具（含零依赖 `web_search`）、会话双记录、作用域与重定向复查、agent 主循环、全部失败路径与模型适配器的 40 项测试、离线端到端闭环、底层 `fetch` 自检、多平台 CI、命令行 `dsh`（交互 / 一次性 / 自检 / 远端） |
+| ✅ 已跑通 | 消息协议、DeepSeek 与离线脚本模型、工具注册与四个内置工具（含零依赖 `web_search`）、会话双记录、作用域与重定向复查、agent 主循环、全部失败路径与模型适配器的 47 项测试、离线端到端闭环（含真实 socket 读取）、底层 `fetch` 自检、多平台 CI、命令行 `dsh`（交互 / 一次性 / 直读网页 / 自检 / 远端） |
 | 🔜 下一步 | 真实站点任务编排、URL 归一化与去重、限速与 `robots.txt`、批量并发抓取、结果结构化与清洗 |
 | 🧩 后续 | 流式输出、断点续爬、会话持久化、真实模型回归、可观测面板 |
 
@@ -269,7 +270,7 @@ console.log(result.status, result.turns, result.text);
 | 文档 | 内容 |
 | --- | --- |
 | [README.md](README.md) | 项目目标、快速开始、命令行、结构、现状与路线图 |
-| [docs/cli.md](docs/cli.md) | `dsh` 四个子命令、参数与环境变量、`web_search` 端点选择、退出码 |
+| [docs/cli.md](docs/cli.md) | `dsh` 五个子命令、参数与环境变量、`web_search` 端点选择、退出码 |
 | [docs/architecture.md](docs/architecture.md) | 分层、数据流、四个设计决定、失败路径、扩展点、编译布局 |
 | [docs/fetch-baseline.md](docs/fetch-baseline.md) | 底层 `fetch` 的运行时事实、实测结论与内核代码对应 |
 | [docs/contributing.md](docs/contributing.md) | 目录规则、commit 规范、环境变量、结构演进 |

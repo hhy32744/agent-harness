@@ -1,9 +1,10 @@
 /**
  * 命令行解析：纯函数，不碰 IO，方便直接单测。
  *
- * 支持的命令（与设计稿一致）：
+ * 支持的命令：
  *   dsh                              启动交互式聊天
  *   dsh prompt <任务文本>            启动一个非交互任务
+ *   dsh read <url>                   直接调用 fetch_url 读一个页面（不需要模型 key）
  *   dsh doctor                       环境与配置检查
  *   dsh remote <host> --prompt <文本> 在远端起一个任务，跑完把结果带回来
  */
@@ -36,6 +37,7 @@ export interface RunOptions {
 export type Command =
   | { kind: "chat"; options: RunOptions }
   | { kind: "prompt"; task: string; options: RunOptions }
+  | { kind: "read"; url: string; raw: boolean; full: boolean; maxBytes?: number; options: RunOptions }
   | { kind: "doctor"; json: boolean; strict: boolean; options: RunOptions }
   | { kind: "remote"; host: string; prompt?: string; options: RunOptions }
   | { kind: "help" }
@@ -55,6 +57,7 @@ const VALUE_FLAGS = new Set([
   "tools",
   "max-turns",
   "max-tool-calls",
+  "max-bytes",
   "role",
   "prompt",
 ]);
@@ -109,7 +112,7 @@ function readFlags(argv: readonly string[]): FlagBag {
       continue;
     }
 
-    const known = ["json", "quiet", "strict", "help", "version", "follow"];
+    const known = ["json", "quiet", "strict", "help", "version", "follow", "raw", "full"];
     if (!known.includes(name)) throw new UsageError(`未知参数 --${name}`, "运行 dsh help 查看全部参数");
     flags.set(name, true);
   }
@@ -198,6 +201,20 @@ export function parseArgv(argv: readonly string[]): Command {
       return { kind: "prompt", task, options };
     }
 
+    case "read": {
+      const url = rest[0];
+      if (!url) throw new UsageError("read 需要一个 URL", "例如 dsh read https://example.com/");
+      if (rest.length > 1) throw new UsageError(`read 只接受一个 URL，多余的：${rest.slice(1).join(" ")}`);
+      return {
+        kind: "read",
+        url,
+        raw: bool(flags, "raw"),
+        full: bool(flags, "full"),
+        maxBytes: int(flags, "max-bytes"),
+        options,
+      };
+    }
+
     case "doctor":
       if (rest.length > 0) throw new UsageError(`doctor 不接受位置参数：${rest.join(" ")}`);
       return { kind: "doctor", json: bool(flags, "json"), strict: bool(flags, "strict"), options };
@@ -216,7 +233,7 @@ export function parseArgv(argv: readonly string[]): Command {
       return { kind: "version" };
 
     default:
-      throw new UsageError(`未知子命令 ${head}`, "可用：dsh / dsh prompt / dsh doctor / dsh remote");
+      throw new UsageError(`未知子命令 ${head}`, "可用：dsh / dsh prompt / dsh read / dsh doctor / dsh remote");
   }
 }
 
@@ -225,8 +242,14 @@ export const HELP_TEXT = `dsh —— 由大模型驱动的网页爬取 agent
 用法：
   dsh                                  启动交互式聊天（多轮，同一会话保留上下文）
   dsh prompt "<任务文本>"               启动一个非交互任务，跑完打印结果
+  dsh read <url>                       直接读一个网页并打印正文（不调用模型，不需要 key）
   dsh doctor                           检查 Node / 密钥 / 模型端点 / 目录 / 工具 / SSH
   dsh remote <host> [--prompt "<文本>"] 在远端执行任务（走 ssh，不带 --prompt 则开远端交互）
+
+read 专用参数：
+  --raw                   打印原始 HTML，不做正文提取
+  --full                  不截断正文（默认只显示前 4000 字符）
+  --max-bytes <n>         最多读多少字节，默认 262144，上限 524288
 
 通用参数：
   --model <name>          模型名，默认取 DSH_MODEL / DEEPSEEK_MODEL，再退到 deepseek-chat
@@ -235,7 +258,7 @@ export const HELP_TEXT = `dsh —— 由大模型驱动的网页爬取 agent
   --tools <names>         限定可用工具，默认 web_search,fetch_url,extract_links,save_markdown
   --max-turns <n>         agent 最大轮次，默认 8
   --max-tool-calls <n>    单次任务最大工具调用次数，默认 16
-  --json                  输出机器可读 JSON（prompt / doctor）
+  --json                  输出机器可读 JSON（prompt / read / doctor）
   --quiet                 只打印最终结果，不打印过程事件
   -h, --help              显示本帮助
   -v, --version           显示版本
@@ -247,6 +270,8 @@ export const HELP_TEXT = `dsh —— 由大模型驱动的网页爬取 agent
   DSH_REMOTE_BIN                  remote 子命令在远端执行的命令名，默认 dsh
 
 示例：
+  dsh read https://example.com/                    # 不配 key 也能跑，验网络读取能力
+  dsh read https://example.com/ --raw --max-bytes 4096
   dsh doctor
   dsh prompt "搜索 agent 的最新进展，挑 3 条总结" --allow-host api.deepseek.com
   dsh remote 4090 --prompt "查看 GPU 状态并汇总"

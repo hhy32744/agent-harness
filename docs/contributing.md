@@ -56,7 +56,7 @@
 npm run typecheck   # 只做类型检查，不产出文件
 npm run build       # tsc → build/
 npm ci              # 全新克隆后第一次安装（严格按锁文件）
-npm test            # 编译 + 40 个用例
+npm test            # 编译 + 47 个用例
 npm run demo        # 离线完整闭环
 npm run demo:fetch  # 底层抓取能力自检
 npm run verify      # 类型检查 + 测试

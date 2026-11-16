@@ -31,7 +31,7 @@ tests/     ─┘
 | 系统提示词 | `src/system-prompt/` | 按当前工具集与作用域动态拼装提示词 |
 | 主循环 | `src/agent-loop/` | **唯一控制流**：`llm.chat → tool_calls → 执行 → 回填 → 再问模型` |
 | 装配 | `src/agent/` | `runAgent`：建工具表、建会话、塞提示词、调用主循环 |
-| 命令行 | `src/cli/` | `dsh` 四个子命令：`chat` / `prompt` / `doctor` / `remote`，见 [命令行文档](cli.md) |
+| 命令行 | `src/cli/` | `dsh` 五个子命令：`chat` / `prompt` / `read` / `doctor` / `remote`，见 [命令行文档](cli.md) |
 | 公共出口 | `src/index.ts` | 上层唯一 import 入口 |
 
 `agent` 这一层只有一个函数、一个 `for` 都没有。想控制会话生命周期（续跑、分支）就绕开 `runAgent`，直接调底层的 `runAgentLoop`——它本来就接受一个现成的 `Session`。

@@ -8,6 +8,8 @@
  *   4) doctor / remote 的判定与命令拼装
  */
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +22,7 @@ import { resolveConfig } from "../src/cli/config";
 import { parseSshHosts, runDoctor } from "../src/cli/doctor";
 import { main } from "../src/cli/index";
 import { runPromptTask, toJson } from "../src/cli/prompt";
+import { extractTitle, formatRead, htmlToText, readUrl } from "../src/cli/read";
 import { buildRemoteCommand, buildSshArgv, shellQuote } from "../src/cli/remote";
 import { parseSearchHtml, parseDuckDuckGoHtml, createWebSearchTool } from "../src/tools/builtin/websearch";
 import { createToolset } from "../src/tools/toolset";
@@ -70,6 +73,99 @@ test("未知子命令 / 缺任务文本 / 未知选项都抛 UsageError", () => 
 test("--allow-host 支持 URL、通配符与去重", () => {
   assert.deepEqual(parseHosts("https://Example.com/a/b, *.foo.com ,example.com"), ["example.com", "*.foo.com"]);
   assert.deepEqual(parseHosts(undefined), []);
+});
+
+// ===== 网络读取（dsh read）=====
+
+test("read 子命令解析 URL 与三个开关", () => {
+  const cmd = parseArgv(["read", "https://example.com/", "--raw", "--full", "--max-bytes", "2048"]);
+  assert.equal(cmd.kind, "read");
+  if (cmd.kind !== "read") return;
+  assert.equal(cmd.url, "https://example.com/");
+  assert.equal(cmd.raw, true);
+  assert.equal(cmd.full, true);
+  assert.equal(cmd.maxBytes, 2048);
+});
+
+test("read 缺 URL 或给多个位置参数都报用法错误", () => {
+  assert.throws(() => parseArgv(["read"]), UsageError);
+  assert.throws(() => parseArgv(["read", "https://a.com", "https://b.com"]), UsageError);
+});
+
+test("htmlToText 丢脚本样式、块级断行、解实体", () => {
+  const html = [
+    "<html><head><title>标题 &amp; 副题</title><style>body{color:red}</style></head>",
+    "<body><h1>大标题</h1><script>var leak = 1;</script>",
+    "<p>第一段&nbsp;文字</p><p>第二段</p></body></html>",
+  ].join("");
+  const text = htmlToText(html);
+  assert.ok(!text.includes("var leak"), "脚本内容必须丢掉");
+  assert.ok(!text.includes("color:red"), "样式内容必须丢掉");
+  assert.ok(text.includes("大标题"));
+  assert.ok(text.includes("第一段 文字"), "&nbsp; 应还原成空格");
+  assert.ok(text.split("\n").includes("第二段"), "块级标签应断行");
+  assert.equal(extractTitle(html), "标题 & 副题");
+});
+
+test("readUrl 与 agent 走同一个 fetch_url，并解析出正文", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response("<title>Hi</title><p>hello world</p>", {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    })) as typeof fetch;
+  try {
+    const r = await readUrl({ url: "https://example.com/" });
+    assert.equal(r.ok, true);
+    assert.equal(r.status, 200);
+    assert.equal(r.title, "Hi");
+    assert.ok(r.body.includes("hello world"));
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("readUrl 同样受主机白名单约束", async () => {
+  const r = await readUrl({ url: "https://example.com/", hosts: ["other.com"] });
+  assert.equal(r.ok, false);
+  assert.match(r.error ?? "", /白名单/);
+});
+
+test("readUrl 能通过真实 socket 读一个 http 页面（只走回环）", async () => {
+  const server = createServer((_req, res) => {
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    res.end("<title>loopback</title><p>read works</p>");
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  try {
+    const r = await readUrl({ url: `http://127.0.0.1:${port}/` });
+    assert.equal(r.status, 200);
+    assert.equal(r.title, "loopback");
+    assert.ok(r.body.includes("read works"));
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("formatRead 默认截断正文，--full 时给全部", () => {
+  const body = "x".repeat(5000);
+  const result = {
+    ok: true,
+    url: "https://example.com/",
+    status: 200,
+    contentType: "text/html",
+    bytes: 5000,
+    truncated: false,
+    elapsedMs: 1,
+    title: "t",
+    body,
+  };
+  const brief = formatRead(result).join("\n");
+  const full = formatRead(result, { full: true }).join("\n");
+  assert.ok(brief.includes("--full"), "截断时应提示怎么看全文");
+  assert.ok(brief.length < full.length);
 });
 
 // ===== 配置优先级 =====
