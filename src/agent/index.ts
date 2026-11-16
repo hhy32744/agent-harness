@@ -48,14 +48,16 @@ export async function runAgent(
     role: "system",
     content: opts.systemPrompt ?? buildSystemPrompt({ role: opts.role ?? "通用助手", tools, scope }),
   });
-  session.record("session.start", {
+  const startEvent = session.record("session.start", {
     agent: opts.name ?? "agent",
     llm: opts.llm.name,
     tools: tools.map((t) => t.name),
   });
+  opts.onEvent?.(startEvent);
 
   session.append({ role: "user", content: input });
-  session.record("user.message", { chars: input.length, preview: input.slice(0, 120) });
+  const userEvent = session.record("user.message", { chars: input.length, preview: input.slice(0, 120) });
+  opts.onEvent?.(userEvent);
 
   const result = await runAgentLoop({ llm: opts.llm, registry, session, scope, signal, onEvent: opts.onEvent });
   return { result, session };

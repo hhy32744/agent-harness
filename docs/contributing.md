@@ -4,7 +4,8 @@
 
 | 内容 | 放在哪 | 说明 |
 | --- | --- | --- |
-| 内核 | `src/` | 唯一公共 API 来源，不依赖 `examples/` 和 `tests/` |
+| 内核 | `src/` | 唯一公共 API 来源，不依赖 `src/cli/`、`examples/` 和 `tests/` |
+| 命令行 | `src/cli/` | `dsh` 子命令；只做参数/配置/渲染/分派，业务逻辑进内核 |
 | 可运行示例 | `examples/` | 演示怎么组装，或做离线自检，不写业务逻辑 |
 | 测试 | `tests/` | 只从 `../src` import，不碰内核内部文件 |
 | 环境脚本 | `scripts/` | 装环境、自检一类的辅助脚本 |
@@ -25,11 +26,13 @@
 
 | 变量 | 用途 | 是否必需 |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` | 真实模型调用 | 仅 `npm run demo:live` 需要 |
-| `DEEPSEEK_MODEL` | 覆盖默认模型 `deepseek-chat` | 可选 |
-| `DEEPSEEK_BASE_URL` | 覆盖 OpenAI 兼容端点 | 可选 |
+| `DEEPSEEK_API_KEY` / `DSH_API_KEY` | 真实模型调用 | `npm run demo:live`、`dsh`、`dsh prompt` 需要 |
+| `DEEPSEEK_MODEL` / `DSH_MODEL` | 覆盖默认模型 `deepseek-chat` | 可选 |
+| `DEEPSEEK_BASE_URL` / `DSH_BASE_URL` | 覆盖 OpenAI 兼容端点 | 可选 |
+| `DSH_SEARCH_ENDPOINT` | `web_search` 的搜索页地址 | 可选，默认必应 |
+| `DSH_REMOTE_BIN` | `dsh remote` 在远端执行的命令名 | 可选，默认 `dsh` |
 
-`npm run demo` 与 `npm run demo:fetch` 都是离线的，**不需要任何 key，也不发外网请求**。
+`npm run demo`、`npm run demo:fetch` 与 `npm test` 都是离线的，**不需要任何 key，也不发外网请求**。
 
 ## 不提交什么
 
@@ -53,7 +56,7 @@
 npm run typecheck   # 只做类型检查，不产出文件
 npm run build       # tsc → build/
 npm ci              # 全新克隆后第一次安装（严格按锁文件）
-npm test            # 编译 + 19 个用例
+npm test            # 编译 + 40 个用例
 npm run demo        # 离线完整闭环
 npm run demo:fetch  # 底层抓取能力自检
 npm run verify      # 类型检查 + 测试
@@ -61,10 +64,11 @@ npm run verify      # 类型检查 + 测试
 
 ## 回归防线
 
-[CI](.github/workflows/ci.yml) 在 Ubuntu / Windows / macOS × Node 18 / 20 / 22 上跑 `npm ci → typecheck → test → demo → demo:fetch`。改内核或示例时留意这几个已经踩过的坑：
+[CI](.github/workflows/ci.yml) 在 Ubuntu / Windows / macOS × Node 18 / 20 / 22 上跑 `npm ci → typecheck → test → demo → demo:fetch → dsh doctor`（doctor 允许 warn，只把 fail 当红）。改内核或示例时留意这几个已经踩过的坑：
 
 - **本地站点的生命周期**：`startMockSite()` 之后必须用 `try/finally` 关掉，且 `close()` 要先 `closeAllConnections()`，否则异常路径或 keep-alive 连接会让进程挂住不退出（曾导致 `demo:live` 缺 key 时卡死）。
 - **环境变量提前校验**：`demo:live` 的 `DEEPSEEK_API_KEY` 要在启动站点之前检查。
 - **路径用 `node:path` 拼**：不要手动写 `${cwd}/out/...`，Windows 上容易得到混合分隔符。
 - **shell 脚本保持 LF**：`.gitattributes` 已固定 `*.sh text eol=lf`。
-- **测试不要依赖外网**：真实模型适配器用 `fetchImpl` 注入，脚本模型用 `ScriptedLLM`。
+- **测试不要依赖外网**：真实模型适配器用 `fetchImpl` 注入，脚本模型用 `ScriptedLLM`，`doctor` 与 `web_search` 的用例全部注入假 `fetch`。
+- **CLI 不重复读 `process.env`**：默认值与优先级只在 `src/cli/config.ts` 一处，否则 `dsh doctor` 报告的和实际跑起来的会不一致。

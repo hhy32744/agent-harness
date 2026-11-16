@@ -40,3 +40,11 @@ jobs:
 
       - name: Fetch baseline self-check
         run: npm run demo:fetch
+
+      # 环境自检：没有密钥 / 搜索端点不通只算 warn，只有 fail 才会让 CI 红
+      - name: CLI doctor
+        run: node build/src/cli/entry.js doctor
+
+      # 参数解析与子命令分派的离线冒烟
+      - name: CLI help
+        run: node build/src/cli/entry.js help

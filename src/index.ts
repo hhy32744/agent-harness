@@ -20,8 +20,19 @@ export type { SessionEvent, SessionEventType, SessionSnapshot } from "./session"
 
 export { buildSystemPrompt } from "./system-prompt";
 
-export { ToolRegistry, webTools, fetchUrlTool, extractLinksTool, saveMarkdownTool } from "./tools";
-export type { JsonSchema, ToolContext, ToolDefinition, ToolResult, ToolSpec } from "./tools/types";
+export {
+  ToolRegistry,
+  webTools,
+  fetchUrlTool,
+  extractLinksTool,
+  saveMarkdownTool,
+  webSearchTool,
+  createWebSearchTool,
+  parseDuckDuckGoHtml,
+  createToolset,
+  DEFAULT_TOOL_NAMES,
+} from "./tools";
+export type { JsonSchema, SearchHit, ToolContext, ToolDefinition, ToolResult, ToolSpec } from "./tools";
 
 export type {
   AssistantMessage,

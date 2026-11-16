@@ -8,12 +8,13 @@
 整个仓库只有一条依赖方向：**上层依赖内核，内核不依赖上层**。
 
 ```
-examples/  ─┐
-            ├──▶  src/  ──▶  Node 内置能力（fetch / node:http / node:test）
+src/cli/   ─┐
+examples/  ─┼──▶  src/  ──▶  Node 内置能力（fetch / node:http / node:test）
 tests/     ─┘
 ```
 
-- `src/` 是唯一的公共 API 来源，不 import 任何 `examples/`、`tests/` 里的东西。
+- `src/` 是唯一的公共 API 来源，不 import 任何 `src/cli/`、`examples/`、`tests/` 里的东西。
+- `src/cli/` 是命令行层：只做参数解析、配置装配、事件渲染与分派，业务逻辑一律落在内核；它不反向被内核依赖。
 - `examples/` 只负责演示「怎么用内核拼出一个 agent」，可以随意改写；其中 `fetch-basics.ts` 是纯底层的离线自检，不依赖内核。
 - `tests/` 只通过 `src` 的公共出口访问内核，不碰内部文件，这样重构内核时测试不用跟着改。
 - 第三方运行时依赖为 **0**：只用 TypeScript 类型 + Node 内置能力。
@@ -30,6 +31,7 @@ tests/     ─┘
 | 系统提示词 | `src/system-prompt/` | 按当前工具集与作用域动态拼装提示词 |
 | 主循环 | `src/agent-loop/` | **唯一控制流**：`llm.chat → tool_calls → 执行 → 回填 → 再问模型` |
 | 装配 | `src/agent/` | `runAgent`：建工具表、建会话、塞提示词、调用主循环 |
+| 命令行 | `src/cli/` | `dsh` 四个子命令：`chat` / `prompt` / `doctor` / `remote`，见 [命令行文档](cli.md) |
 | 公共出口 | `src/index.ts` | 上层唯一 import 入口 |
 
 `agent` 这一层只有一个函数、一个 `for` 都没有。想控制会话生命周期（续跑、分支）就绕开 `runAgent`，直接调底层的 `runAgentLoop`——它本来就接受一个现成的 `Session`。
@@ -84,7 +86,7 @@ flowchart TD
 
 ## 5. 失败路径清单
 
-主循环的每一条退出路径都有对应测试覆盖（`tests/core.test.ts`，共 19 例，含真实模型适配器的离线注入测试）：
+主循环的每一条退出路径都有对应测试覆盖（`tests/core.test.ts` 19 例 + `tests/cli.test.ts` 21 例，含真实模型适配器的离线注入测试）：
 
 | 情况 | 处理方式 | 退出状态 |
 | --- | --- | --- |
@@ -112,9 +114,11 @@ flowchart TD
 
 ```
 build/src/...             ← 内核（可单独引用，入口 build/src/index.js）
+build/src/cli/entry.js    ← dsh 可执行入口（package.json 的 bin.dsh，保留 shebang）
 build/examples/cli.js     ← npm run demo 的入口
 build/examples/fetch-basics.js  ← npm run demo:fetch 的入口
 build/tests/core.test.js  ← npm test 的入口
+build/tests/cli.test.js   ← npm test 的入口
 ```
 
-`package.json` 的 `main` 指向 `build/src/index.js`。`build/`、`out/`、`node_modules/` 都不纳入版本控制。
+`package.json` 的 `main` 指向 `build/src/index.js`，`bin.dsh` 指向 `build/src/cli/entry.js`。`build/`、`out/`、`node_modules/` 都不纳入版本控制。

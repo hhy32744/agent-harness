@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agent-harness 一键环境脚本：Ubuntu 24.04 / Debian 系
-# 作用：准备 Node.js 22 → 安装依赖 → 类型检查 + 测试 → 跑一遍离线闭环
+# 作用：准备 Node.js 22 → 安装依赖 → 类型检查 + 测试 → 跑一遍离线闭环 → 环境自检（dsh doctor）
 # Windows / macOS 无需此脚本，直接在项目根目录执行 npm install && npm test && npm run demo
 set -e
 
@@ -27,9 +27,12 @@ npm ci
 npm run typecheck
 npm test
 
-echo "==== 4/4 跑一遍离线闭环 ===="
+echo "==== 4/4 跑一遍离线闭环 + 环境自检 ===="
 npm run demo
+node build/src/cli/entry.js doctor || true
 
 echo "==== 完成 ===="
-echo "接真实模型：DEEPSEEK_API_KEY=sk-xxx npm run demo:live"
+echo "命令行：node build/src/cli/entry.js            （交互聊天）"
+echo "        node build/src/cli/entry.js prompt \"任务\"  （一次性任务）"
+echo "接真实模型：export DEEPSEEK_API_KEY=sk-xxx && npm run demo:live"
 echo "底层抓取自检：npm run demo:fetch"

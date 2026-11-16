@@ -6,7 +6,7 @@
 
 一个由大模型驱动、可约束的网页爬取 Agent。当前交付的是它的最小可运行内核：消息协议、工具执行、会话记录、作用域与 agent 主循环。不依赖框架、不引第三方运行时库，只用 TypeScript + Node 内置能力。
 
-`Node ≥ 18` · `TypeScript ^5.6` · `零第三方运行时依赖` · `19 / 19 测试通过` · `ISC`
+`Node ≥ 18` · `TypeScript ^5.6` · `零第三方运行时依赖` · `40 / 40 测试通过` · `ISC`
 
 ---
 
@@ -14,6 +14,7 @@
 
 - [项目目标](#项目目标)
 - [快速开始](#快速开始)
+- [命令行 dsh](#命令行-dsh)
 - [项目结构](#项目结构)
 - [系统怎么跑](#系统怎么跑)
 - [内核模块](#内核模块)
@@ -41,6 +42,7 @@
 | 你想… | 去这里 / 跑这条 |
 | --- | --- |
 | 先把项目跑起来 | 下面「快速开始」的 3 条命令 |
+| 用命令行聊天 / 跑任务 / 查环境 | [命令行 dsh](#命令行-dsh) |
 | 搞懂内核为什么这样设计 | [架构与设计说明](docs/architecture.md) |
 | 加工具、换模型、收边界 | [架构说明 · 扩展点](docs/architecture.md#6-扩展点) |
 | 弄明白底层 `fetch` 的行为 | [底层抓取能力说明](docs/fetch-baseline.md) |
@@ -54,7 +56,7 @@
 git clone git@github.com:hhy32744/agent-harness.git
 cd agent-harness
 npm ci
-npm test          # 19 个用例，覆盖主循环全部退出路径与真实模型适配器
+npm test          # 40 个用例，覆盖主循环全部退出路径、真实模型适配器与 CLI
 npm run demo      # 离线端到端闭环：脚本模型 + 本地 mock 站点
 ```
 
@@ -64,7 +66,7 @@ npm run demo      # 离线端到端闭环：脚本模型 + 本地 mock 站点
 > `npm run demo` **不需要 API key、不发外网请求**，会把 `LLM → 工具 → LLM` 完整跑一遍，还故意请求一次白名单外的站点，用来验证边界确实生效。
 
 > [!NOTE]
-> 每次 push 都会触发 [CI](.github/workflows/ci.yml)：**Ubuntu / Windows / macOS × Node 18 / 20 / 22** 共 9 组，依次跑 `npm ci → typecheck → test → demo → demo:fetch`。上面的命令与 CI 完全一致，所以「下载下来就能跑」是被自动验证的，不是靠文档承诺。
+> 每次 push 都会触发 [CI](.github/workflows/ci.yml)：**Ubuntu / Windows / macOS × Node 18 / 20 / 22** 共 9 组，依次跑 `npm ci → typecheck → test → demo → demo:fetch → dsh doctor`。上面的命令与 CI 完全一致，所以「下载下来就能跑」是被自动验证的，不是靠文档承诺。
 
 想接真实模型：
 
@@ -82,7 +84,9 @@ DEEPSEEK_API_KEY=sk-xxx npm run demo:live
 | `npm run build` | `tsc` 编译到 `build/` |
 | `npm run typecheck` | 只做类型检查，不产出文件 |
 | `npm run verify` | 类型检查 + 全量测试 |
-| `npm test` | 编译 + 运行 19 个用例 |
+| `npm test` | 编译 + 运行 40 个用例 |
+| `npm run dsh` | 编译后启动 `dsh`（不带参数即交互聊天） |
+| `npm run doctor` | 编译后跑一次环境与配置检查 |
 | `npm run demo` | 离线端到端闭环 |
 | `npm run demo:live` | 换成真实 DeepSeek 模型，agent 代码不变 |
 | `npm run demo:fetch` | 底层 `fetch` 行为自检（本地站点，不出网） |
@@ -107,6 +111,44 @@ DEEPSEEK_API_KEY=sk-xxx npm run demo:live
 
 </details>
 
+## 命令行 dsh
+
+内核只有 API，`dsh` 是把内核接到人手上的那一层。四条命令各管一件事：
+
+```bash
+dsh                                     # 交互式聊天：多轮，同一会话保留上下文
+dsh prompt "抓取 example.com 首页并总结"   # 非交互任务：跑完打印结果，可进脚本 / CI
+dsh doctor                              # 环境自检：Node / 密钥 / 端点 / 目录 / 工具 / SSH
+dsh remote 4090 --prompt "查看 GPU 状态"  # 远端跑同一个 prompt，输出流回本地
+```
+
+```bash
+npm run build && npm link   # 之后可在任意目录调用 dsh；不装就用 npm run dsh -- <参数>
+```
+
+```
+$ dsh
+dsh 0.1.0 | model=deepseek-chat | endpoint=https://api.deepseek.com | 主机=未限制 | 工具=4
+= 会话启动 agent=dsh llm=openai-compatible:deepseek-chat tools=4
+
+输入任务开始对话；/help 查看命令，/exit 退出。
+
+dsh> 搜一下 4090 的显存规格
+· 第1轮助手：（发起 1 个工具调用）
+  -> web_search {"query":"4090 显存 规格","limit":5}
+  <- web_search ok（1234 字）
+· 第2轮助手：4090 是 24GB GDDR6X……
+-- completed | 2 轮 | 1 次工具 | 1832ms token=2415
+```
+
+三个要点：
+
+- **聊天不需要额外的记忆模块**：一个 `dsh` 进程只建一个 `Session`，每行输入只是追加一条 `user` 消息再跑 loop，所以追问天然带上下文；`/reset` 就是换一个 `Session`。
+- **`doctor` 分三档而不是二值**：缺密钥、搜索端点不通只 `warn`（离线能力仍可用），密钥被拒或目录不可写才 `fail`。默认退出码 0，加 `--strict` 才让警告也返回非 0 —— 这样它能直接当 CI 冒烟检查。
+- **`remote` 就是一条 ssh**：`ssh -- <host> 'dsh prompt ...'`，不做常驻服务、不做端口转发；主机名直接用 `~/.ssh/config` 的别名，任务文本经单引号转义后作为参数传递。
+
+完整参数表、`/` 命令、退出码与已知限制见 [命令行 dsh](docs/cli.md)。
+
 ## 项目结构
 
 ```
@@ -115,25 +157,26 @@ agent-harness/
 │  ├─ index.ts                 公共出口（上层只从这里 import）
 │  ├─ types.ts                 消息协议（system / user / assistant / tool）
 │  ├─ llm/                     LLMClient + DeepSeek 适配 + 离线脚本模型
-│  ├─ tools/                   ToolRegistry + fetch_url / extract_links / save_markdown
+│  ├─ tools/                   ToolRegistry + web_search / fetch_url / extract_links / save_markdown
 │  ├─ session/                 消息流 + 事件日志 + fork
 │  ├─ scope/                   工具/主机白名单、轮次与次数/超时/输出预算
 │  ├─ system-prompt/           按工具集与作用域动态拼提示词
 │  ├─ agent-loop/              主循环（唯一控制流）
-│  └─ agent/                   装配成 runAgent
+│  ├─ agent/                   装配成 runAgent
+│  └─ cli/                     命令行 dsh：args / config / chat / prompt / doctor / remote
 ├─ examples/                   ← 可运行示例
 │  ├─ cli.ts                   端到端闭环（demo / demo:live）
 │  ├─ mock-site.ts             本地 mock 站点
 │  └─ fetch-basics.ts          底层抓取能力自检（demo:fetch）
-├─ tests/core.test.ts          ← 19 个用例
+├─ tests/                       ← 40 个用例（core 19 + cli 21）
 ├─ scripts/setup.sh            ← Linux 一键装环境与自检
-├─ docs/                       ← 架构、底层能力、开发约定
+├─ docs/                       ← 架构、命令行、底层能力、开发约定
 ├─ .github/workflows/ci.yml    ← 多平台自动验证
 ├─ build/  out/                ← 编译产物与运行产物（均已忽略）
 └─ package.json / tsconfig.json / package-lock.json / LICENSE / .gitignore / .gitattributes / .editorconfig
 ```
 
-**分层原则**：`examples/` 与 `tests/` 单向依赖 `src/`，内核不反向依赖它们。编译产物按目录分开落在 `build/`，内核单独位于 `build/src/`，可独立引用。工作区同级的 `deliverables/` 存放报告类交付物，不纳入版本控制。
+**分层原则**：`src/cli/`、`examples/`、`tests/` 单向依赖内核，内核不反向依赖它们。编译产物按目录分开落在 `build/`，内核单独位于 `build/src/`，可独立引用；`package.json` 的 `bin.dsh` 指向 `build/src/cli/entry.js`。工作区同级的 `deliverables/` 存放报告类交付物，不纳入版本控制。
 
 ## 系统怎么跑
 
@@ -158,12 +201,13 @@ flowchart LR
 | --- | --- | --- |
 | 消息协议 | `src/types.ts` | 四类消息、`ToolCall`、`TokenUsage`、错误描述 |
 | LLM 适配 | `src/llm/` | `LLMClient` 接口、OpenAI 兼容实现（DeepSeek）、离线 `ScriptedLLM` |
-| 工具 | `src/tools/` | 注册表 + 抓取 / 抽链接 / 落盘三个内置工具 |
+| 工具 | `src/tools/` | 注册表 + 搜索 / 抓取 / 抽链接 / 落盘四个内置工具 |
 | 会话 | `src/session/` | 给模型看的 `messages`、给人复盘的 `events`、快照与 `fork` |
 | 作用域 | `src/scope/` | 工具与主机白名单、轮次 / 次数 / 超时 / 输出长度预算 |
 | 系统提示词 | `src/system-prompt/` | 按当前工具集与作用域动态拼装 |
 | 主循环 | `src/agent-loop/` | **唯一控制流**：`llm.chat → tool_calls → 执行 → 回填 → 再问模型` |
 | 装配 | `src/agent/` | `runAgent`：建工具表、建会话、塞提示词、调主循环 |
+| 命令行 | `src/cli/` | `dsh` 四个子命令；只做参数、配置、渲染与分派，不含业务逻辑 |
 | 公共出口 | `src/index.ts` | 上层唯一 import 入口 |
 
 ## 四个设计决定
@@ -183,9 +227,9 @@ flowchart LR
 
 | 状态 | 能力 |
 | --- | --- |
-| ✅ 已跑通 | 消息协议、DeepSeek 与离线脚本模型、工具注册与三个内置工具、会话双记录、作用域与重定向复查、agent 主循环、全部失败路径与模型适配器的 19 项测试、离线端到端闭环、底层 `fetch` 自检、多平台 CI |
+| ✅ 已跑通 | 消息协议、DeepSeek 与离线脚本模型、工具注册与四个内置工具（含零依赖 `web_search`）、会话双记录、作用域与重定向复查、agent 主循环、全部失败路径与模型适配器的 40 项测试、离线端到端闭环、底层 `fetch` 自检、多平台 CI、命令行 `dsh`（交互 / 一次性 / 自检 / 远端） |
 | 🔜 下一步 | 真实站点任务编排、URL 归一化与去重、限速与 `robots.txt`、批量并发抓取、结果结构化与清洗 |
-| 🧩 后续 | 断点续爬、会话持久化、真实模型回归、可观测面板 |
+| 🧩 后续 | 流式输出、断点续爬、会话持久化、真实模型回归、可观测面板 |
 
 > [!NOTE]
 > 目标是**完整爬取 Agent**，内核只是底座：加能力就加 `ToolDefinition`，收边界就改 `Scope`，换模型就实现 `LLMClient`——都不用动 `agent-loop`。
@@ -224,7 +268,8 @@ console.log(result.status, result.turns, result.text);
 
 | 文档 | 内容 |
 | --- | --- |
-| [README.md](README.md) | 项目目标、快速开始、结构、现状与路线图 |
+| [README.md](README.md) | 项目目标、快速开始、命令行、结构、现状与路线图 |
+| [docs/cli.md](docs/cli.md) | `dsh` 四个子命令、参数与环境变量、`web_search` 端点选择、退出码 |
 | [docs/architecture.md](docs/architecture.md) | 分层、数据流、四个设计决定、失败路径、扩展点、编译布局 |
 | [docs/fetch-baseline.md](docs/fetch-baseline.md) | 底层 `fetch` 的运行时事实、实测结论与内核代码对应 |
 | [docs/contributing.md](docs/contributing.md) | 目录规则、commit 规范、环境变量、结构演进 |
@@ -236,6 +281,6 @@ console.log(result.status, result.turns, result.text);
 | Node.js | ≥ 18（内置 fetch），实测 18.20.8 / 22.22.2 |
 | TypeScript | `^5.6`（devDependency，锁文件固定 5.9.3） |
 | 真实模型 | DeepSeek `deepseek-chat`，OpenAI 兼容协议，需 `DEEPSEEK_API_KEY` |
-| 可选覆盖 | `DEEPSEEK_MODEL`、`DEEPSEEK_BASE_URL` |
+| 可选覆盖 | `DSH_MODEL` / `DEEPSEEK_MODEL`、`DSH_BASE_URL` / `DEEPSEEK_BASE_URL`、`DSH_API_KEY`、`DSH_SEARCH_ENDPOINT`、`DSH_REMOTE_BIN` |
 
 **提交约定**：一个主题一个 commit，用 `feat:` / `fix:` / `docs:` / `chore:` / `refactor:` / `test:` 前缀写清「改了什么、为什么」；不提交 `node_modules/`、`build/`、`out/`、`.env`，API key 只从环境变量读。详见 [开发与提交约定](docs/contributing.md)。

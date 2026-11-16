@@ -6,20 +6,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import type { ToolDefinition } from "../types";
+import { readNumber as num, readString as str, stripTags } from "./params";
 
 const USER_AGENT = "agent-harness/0.1 (+crawler agent)";
 const MAX_BYTES = 512 * 1024;
-
-function str(input: Record<string, unknown>, key: string): string {
-  const v = input[key];
-  if (typeof v !== "string" || v.trim() === "") throw new Error(`参数 ${key} 必须是非空字符串`);
-  return v.trim();
-}
-
-function num(input: Record<string, unknown>, key: string, fallback: number): number {
-  const v = input[key];
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
-}
 
 /** 抓取一个 URL，返回 JSON 字符串（状态码 / 体积 / 正文） */
 export const fetchUrlTool: ToolDefinition = {
@@ -152,9 +142,5 @@ export const saveMarkdownTool: ToolDefinition = {
     };
   },
 };
-
-function stripTags(s: string): string {
-  return s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
-}
 
 export const webTools: ToolDefinition[] = [fetchUrlTool, extractLinksTool, saveMarkdownTool];
