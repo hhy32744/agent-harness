@@ -10,6 +10,10 @@ import type { ToolDefinition } from "../tools/types";
 import { HELP_TEXT, UsageError, parseArgv, version, type Command, type RunOptions } from "./args";
 import { MissingApiKeyError, createLLM, createScope, createTools, resolveConfig, type CliConfig } from "./config";
 import { createReadlineIO, runChat } from "./chat";
+import { createTuiIO, runTui } from "../tui";
+import { loadPresetManager } from "./config";
+import { runPresetCommand } from "./preset";
+import { version as cliVersion } from "./args";
 import { formatRead, readUrl } from "./read";
 import { formatOutcome, runPromptTask, toJson } from "./prompt";
 import { formatDoctor, runDoctor } from "./doctor";
@@ -65,6 +69,12 @@ export async function main(argv: readonly string[], options: CliOptions = {}): P
 
     case "chat":
       return runChatCommand(command.options, env, io);
+
+    case "tui":
+      return runTuiCommand(command.options, env, io);
+
+    case "preset":
+      return runPresetCommand(command.operation, env, io, command.options.json);
 
     case "prompt":
       return runPromptCommand(command.task, command.options, env, io);
@@ -124,6 +134,31 @@ async function runChatCommand(options: RunOptions, env: NodeJS.ProcessEnv, io: C
       io: chatIO,
       verbose: !options.quiet,
       name: "dsh",
+      extraRules: ready.config.preset?.extraRules,
+    });
+  } finally {
+    close();
+  }
+  return EXIT_OK;
+}
+
+/** TUI：与交互聊天共用同一份装配，只是呈现层换成终端界面 */
+async function runTuiCommand(options: RunOptions, env: NodeJS.ProcessEnv, io: CliIO): Promise<number> {
+  const ready = assemble(options, env, io);
+  if (typeof ready === "number") return ready;
+
+  const { io: tuiIO, close } = createTuiIO();
+  try {
+    await runTui({
+      llm: ready.llm,
+      tools: ready.tools,
+      scope: ready.scope,
+      role: ready.config.role,
+      extraRules: ready.config.preset?.extraRules,
+      presetManager: loadPresetManager(env),
+      name: "dsh",
+      version: cliVersion(),
+      io: tuiIO,
     });
   } finally {
     close();
@@ -145,6 +180,7 @@ async function runPromptCommand(
     tools: ready.tools,
     scope: ready.scope,
     role: ready.config.role,
+    extraRules: ready.config.preset?.extraRules,
     io: { print: (line?: string) => io.out(line) },
     verbose: !options.quiet && !options.json,
     name: "dsh",

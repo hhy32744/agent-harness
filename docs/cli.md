@@ -1,12 +1,14 @@
 # 命令行：`dsh`
 
-> 内核是库，`dsh` 是它的执行入口。本文讲五条命令各自解决什么问题、参数怎么传、以及几个"为什么这样设计"的取舍。
+> 内核是库，`dsh` 是它的执行入口。本文讲各条命令各自解决什么问题、参数怎么传、以及几个"为什么这样设计"的取舍。
 > 只想跑起来，看 [README 快速开始](../README.md#快速开始)。
 
-## 1. 五条命令
+## 1. 命令一览
 
 ```bash
 dsh                                    # 交互式聊天（多轮，同一会话保留上下文）
+dsh tui                                # 终端界面：banner / 工具时间线（含耗时）/ 状态栏 / 会话落盘
+dsh preset [list|use <id>|on <id>|off <id>|export|import <file>]  # 管理智能体预设
 dsh prompt "抓取 example.com 首页并总结"  # 非交互任务，跑完打印结果
 dsh read https://example.com/           # 直接读一个网页（不调模型，不需要 key）
 dsh doctor                             # 环境与配置检查
@@ -234,6 +236,49 @@ dsh read <url> --max-bytes 4096        # 直读网页不过模型，完全不花
 
 > 价格参考（2026-11，公开资料，以官方账单为准）：Flash 系列约 ¥0.8/百万输入、¥2/百万输出，Plus 系列约 ¥0.96–4.8/百万输入、¥2.4–4.8/百万输出；Batch 调用通常半价。免费额度本身不区分模型档位。
 
+## 11b. `dsh tui`：终端交互界面
+
+`dsh tui` 与 `dsh` 共用同一套内核（同一 `Session` / 工具集 / 作用域），只是换了一层呈现：
+
+- 顶部 ASCII banner + 模型 / 预设 / 版本 + `/help 帮助 · Esc 取消 · <Ctrl+C> 强制退出`；
+- 用户轮以 `▶` 标记；每次工具调用打印 `● web-search {...}`，结果回来补一行 `└ ok 388 ms`——耗时取事件时间戳之差，真实墙钟；
+- 一轮结束打印 `本轮完成` + 状态栏（`模型 · 缓存 · 待处理 N · token 数`）；
+- 会话每轮以 JSONL 落盘到 `$DSH_HOME/sessions/<sessionId>/session.jsonl`（默认 `~/.dsh/sessions`），可用于复盘评分。
+
+内置斜杠命令：`/help` `/preset [id]` `/tools` `/scope` `/reset` `/exit`。在真实 TTY 里按 `Esc` 取消当前轮（通过 `AbortSignal`），`<Ctrl+C>` 退出。非 TTY（管道 / 测试）自动关闭 Esc 监听。
+
+```bash
+npm run dsh -- tui                       # 交互式
+npm run demo:tui                         # 脚本化输入的端到端演示（真实模型 + 真实 web_search）
+npm run demo:tui > out/tui-transcript.txt  # 存档终端输出作为执行证据
+```
+
+## 11c. `dsh preset`：智能体预设管理
+
+一个**预设**把四样东西打成一个可复用配置包：人设 `role`、工具策略（全量 / 白名单 / 排除名单）、作用域覆盖（轮次 / 工具次数 / 输出上限）、元信息（id / 名称 / 描述 / 启停 / 顺序 / 额外规则）。设计参照 DSH（DeepSeek Harness）的 preset 机制，三层生效：给模型的工具清单（可见性）→ `Scope.allowedTools`（调用守卫）→ system prompt（人设注入）。
+
+```bash
+dsh preset                       # 列出全部预设与当前激活项
+dsh preset use builtin:search-only   # 激活：工具收窄为 web_search，预算 4 轮
+dsh preset on builtin:web        # 启用
+dsh preset off builtin:web       # 禁用（禁用后自动回退到第一个启用项）
+dsh preset export                # 导出元信息清单 JSON（不含提示词与名单）
+dsh preset import list.json      # 导入清单，只更新本地已有 id
+```
+
+内置三个预设：`builtin:web`（默认四件套）、`builtin:search-only`（最省额度）、`builtin:readonly-crawl`（已知 URL 精读）。也可用 `--preset <id>` 或 `DSH_PRESET` 单次指定；命令行显式参数（`--tools` / `--role` / `--max-turns`）始终高于预设。
+
+配置文件：`$DSH_HOME/presets.json`（默认 `~/.dsh/presets.json`），原子写（临时文件 + rename）。文件缺失或损坏都会降级到内置预设，不阻断启动。内置预设不可删除 / 覆盖，只能启停；自定义预设可新增（`PresetManager.upsert`）、复制、两步确认删除。导入 / 导出只含元信息，避免把提示词与名单写进分享文件。
+
+## 11d. web_search 的后端切换
+
+默认零依赖抓必应 HTML；两种切换方式：
+
+- `DSH_SEARCH_ENDPOINT`：换 HTML 搜索引擎（必应 / DuckDuckGo / SearXNG），解析器按页面特征自动识别；
+- `DSH_SEARCH_PROVIDER=tavily` + `DSH_TAVILY_KEY`：改用 Tavily JSON API（`TAVILY_ENDPOINT` 固定），返回更稳但需 key 与额度。
+
+进程内带 10 分钟搜索缓存：同一 query 秒回，TUI 状态栏会显示缓存命中，既省钱又能看出重复调用。
+
 ## 12. 退出码
 
 | 码 | 含义 |
@@ -245,6 +290,6 @@ dsh read <url> --max-bytes 4096        # 直读网页不过模型，完全不花
 ## 12. 已知限制
 
 - 交互模式没有流式输出：模型整段返回后再打印（`OpenAICompatibleClient` 目前是 `stream: false`）。
-- 会话不持久化：`dsh` 退出后上下文即丢弃；续跑要自己用 `runAgentLoop` + 现成 `Session`。
+- `dsh` 交互式聊天退出后上下文即丢弃；需要落盘复盘请用 `dsh tui`（每轮写 JSONL 到 `~/.dsh/sessions/`），或自己用 `runAgentLoop` + 现成 `Session`。
 - `remote` 依赖远端已装 `dsh`；没有远端安装时，`dsh remote` 会在 ssh 之后报"command not found"。
 - 没有多行输入与文件附件；需要长文本时用 `dsh prompt "$(cat task.txt)"` 这类 shell 组合。

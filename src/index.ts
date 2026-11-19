@@ -20,6 +20,33 @@ export type { SessionEvent, SessionEventType, SessionSnapshot } from "./session"
 
 export { buildSystemPrompt } from "./system-prompt";
 
+// 预设插件管理：人设 + 工具策略 + 边界 + 启停/导入导出的配置包
+export { PresetManager, defaultPresetFile, BUILTIN_PRESETS, cloneBuiltins, applyToolPolicy, normalizePolicy, makeId } from "./preset";
+export type {
+  Preset,
+  PresetFile,
+  PresetManifestItem,
+  ResolvedPreset,
+  ToolPolicy,
+  ToolPolicyMode,
+} from "./preset";
+
+// 终端 TUI：课程示例风格的交互式会话界面
+export { runTui, createTuiIO } from "./tui";
+export type { TuiIO, TuiOptions, TuiOutcome } from "./tui";
+export {
+  renderBanner,
+  renderUser,
+  renderEvent,
+  renderAnswer,
+  renderDone,
+  renderHelp,
+  newRenderState,
+  palette,
+  DSH_BANNER,
+} from "./tui/render";
+export type { Palette, RenderState } from "./tui/render";
+
 export {
   ToolRegistry,
   webTools,
@@ -29,6 +56,8 @@ export {
   webSearchTool,
   createWebSearchTool,
   parseDuckDuckGoHtml,
+  parseTavilyJson,
+  clearSearchCache,
   createToolset,
   DEFAULT_TOOL_NAMES,
 } from "./tools";

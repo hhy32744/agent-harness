@@ -25,13 +25,15 @@ tests/     ─┘
 | --- | --- | --- |
 | 消息协议 | `src/types.ts` | `system / user / assistant / tool` 四类消息、`ToolCall`、`TokenUsage`、错误描述 |
 | LLM 适配 | `src/llm/` | `LLMClient` 接口；OpenAI 兼容实现（DeepSeek）与离线脚本模型 `ScriptedLLM` |
-| 工具 | `src/tools/` | `ToolRegistry` 注册与执行；内置 `fetch_url` / `extract_links` / `save_markdown` |
+| 工具 | `src/tools/` | `ToolRegistry` 注册与执行；内置 `web_search`（必应 HTML / Tavily JSON 双后端 + 缓存）/ `fetch_url` / `extract_links` / `save_markdown` |
+| 预设插件 | `src/preset/` | `PresetManager`：人设 + 工具策略 + 作用域覆盖 + 元信息打成配置包；启停 / 导入导出 / 原子持久化，参照 DSH preset 机制 |
 | 会话 | `src/session/` | 消息流 `messages`、事件日志 `events`、快照与 `fork` |
 | 作用域 | `src/scope/` | 工具白名单、域名白名单、轮次 / 次数 / 超时 / 输出长度预算 |
 | 系统提示词 | `src/system-prompt/` | 按当前工具集与作用域动态拼装提示词 |
 | 主循环 | `src/agent-loop/` | **唯一控制流**：`llm.chat → tool_calls → 执行 → 回填 → 再问模型` |
 | 装配 | `src/agent/` | `runAgent`：建工具表、建会话、塞提示词、调用主循环 |
-| 命令行 | `src/cli/` | `dsh` 五个子命令：`chat` / `prompt` / `read` / `doctor` / `remote`，见 [命令行文档](cli.md) |
+| 终端界面 | `src/tui/` | `dsh tui`：ASCII banner + 工具时间线（真实耗时）+ 状态栏 + 会话 JSONL 落盘；纯渲染函数可离线断言 |
+| 命令行 | `src/cli/` | `dsh` 子命令：`chat` / `tui` / `preset` / `prompt` / `read` / `doctor` / `remote`，见 [命令行文档](cli.md) |
 | 公共出口 | `src/index.ts` | 上层唯一 import 入口 |
 
 `agent` 这一层只有一个函数、一个 `for` 都没有。想控制会话生命周期（续跑、分支）就绕开 `runAgent`，直接调底层的 `runAgentLoop`——它本来就接受一个现成的 `Session`。

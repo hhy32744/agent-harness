@@ -7,8 +7,11 @@ export {
   parseSearchHtml,
   parseBingHtml,
   parseDuckDuckGoHtml,
+  parseTavilyJson,
+  clearSearchCache,
   DEFAULT_SEARCH_ENDPOINT,
   DUCKDUCKGO_ENDPOINT,
+  TAVILY_ENDPOINT,
 } from "./builtin/websearch";
 export type { SearchHit, WebSearchOptions } from "./builtin/websearch";
 export { createToolset, DEFAULT_TOOL_NAMES } from "./toolset";

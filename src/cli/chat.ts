@@ -29,6 +29,8 @@ export interface ChatOptions {
   scope: Scope;
   role: string;
   name?: string;
+  /** 预设注入的额外规则 */
+  extraRules?: string[];
   io: ChatIO;
   /** 打印过程事件，默认 true；--quiet 时关掉 */
   verbose?: boolean;
@@ -55,7 +57,7 @@ export async function runChat(opts: ChatOptions): Promise<ChatOutcome> {
   const verbose = opts.verbose !== false;
   const registry = new ToolRegistry().register(...opts.tools);
   const specs = registry.specs();
-  const systemPrompt = buildSystemPrompt({ role: opts.role, tools: specs, scope });
+  const systemPrompt = buildSystemPrompt({ role: opts.role, tools: specs, scope, extraRules: opts.extraRules });
 
   const newSession = (): Session => {
     const session = new Session();

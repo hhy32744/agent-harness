@@ -19,6 +19,8 @@ export interface AgentOptions {
   scope?: Scope;
   /** 角色描述，用于自动生成系统提示词 */
   role?: string;
+  /** 追加到系统提示词的业务规则（来自预设） */
+  extraRules?: string[];
   /** 直接给一整份系统提示词；给了就不再自动拼 */
   systemPrompt?: string;
   /** 事件回调，CLI 用来实时打印，测试用来断言 */
@@ -46,7 +48,7 @@ export async function runAgent(
 
   session.append({
     role: "system",
-    content: opts.systemPrompt ?? buildSystemPrompt({ role: opts.role ?? "通用助手", tools, scope }),
+    content: opts.systemPrompt ?? buildSystemPrompt({ role: opts.role ?? "通用助手", tools, scope, extraRules: opts.extraRules }),
   });
   const startEvent = session.record("session.start", {
     agent: opts.name ?? "agent",

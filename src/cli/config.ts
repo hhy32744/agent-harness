@@ -6,6 +6,7 @@
  * doctor 检查的和实际跑的对不上，是最难查的一类问题。
  */
 import { Scope } from "../scope";
+import { PresetManager, defaultPresetFile } from "../preset";
 import { OpenAICompatibleClient } from "../llm/openai-client";
 import type { LLMClient } from "../llm/types";
 import type { ToolDefinition } from "../tools/types";
@@ -28,6 +29,13 @@ export interface CliConfig {
   searchEndpoint?: string;
   /** remote 子命令在远端执行的命令名 */
   remoteBin: string;
+  /** 本次生效的预设（解析后的配置），没有则为 undefined */
+  preset?: {
+    id: string;
+    name: string;
+    role?: string;
+    extraRules: string[];
+  };
 }
 
 const DEFAULTS = {
@@ -52,7 +60,6 @@ const DASHSCOPE_DEFAULTS = {
 } as const;
 
 export function resolveConfig(options: RunOptions, env: NodeJS.ProcessEnv = process.env): CliConfig {
-  const tools = (options.tools && options.tools.length > 0 ? options.tools : [...DEFAULT_TOOL_NAMES]).map((t) => t.trim());
   const apiKey = pick(env.DSH_API_KEY, env.DEEPSEEK_API_KEY, env.DASHSCOPE_API_KEY);
 
   // 只有当密钥确实来自 DashScope（没有更高优先级的 key）时，才切换默认端点与模型。
@@ -61,19 +68,29 @@ export function resolveConfig(options: RunOptions, env: NodeJS.ProcessEnv = proc
   const defaultBaseUrl = fromDashscope ? DASHSCOPE_DEFAULTS.baseUrl : DEFAULTS.baseUrl;
   const defaultModel = fromDashscope ? DASHSCOPE_DEFAULTS.model : DEFAULTS.model;
 
+  // 预设解析：显式 --preset > DSH_PRESET > 文件里激活的预设。
+  // 预设只提供"默认值"，命令行显式参数（--tools/--role/--max-turns…）始终优先。
+  const manager = PresetManager.loadSync(defaultPresetFile(env));
+  const presetId = options.preset ?? pick(env.DSH_PRESET);
+  const resolved = presetId ? manager.resolve({ id: presetId, universe: DEFAULT_TOOL_NAMES }) : manager.resolve({ universe: DEFAULT_TOOL_NAMES });
+  const presetTools = resolved?.toolNames;
+  const tools = (options.tools && options.tools.length > 0 ? options.tools : presetTools ?? [...DEFAULT_TOOL_NAMES]).map((t) => t.trim());
+
+  const scopeFromPreset = resolved?.scope ?? {};
   return {
     apiKey,
     baseUrl: options.baseUrl ?? pick(env.DSH_BASE_URL, env.DEEPSEEK_BASE_URL) ?? defaultBaseUrl,
     model: options.model ?? pick(env.DSH_MODEL, env.DEEPSEEK_MODEL) ?? defaultModel,
-    maxTurns: options.maxTurns ?? DEFAULTS.maxTurns,
-    maxToolCalls: options.maxToolCalls ?? DEFAULTS.maxToolCalls,
-    maxOutputChars: DEFAULTS.maxOutputChars,
-    toolTimeoutMs: DEFAULTS.toolTimeoutMs,
+    maxTurns: options.maxTurns ?? scopeFromPreset.maxTurns ?? DEFAULTS.maxTurns,
+    maxToolCalls: options.maxToolCalls ?? scopeFromPreset.maxToolCalls ?? DEFAULTS.maxToolCalls,
+    maxOutputChars: scopeFromPreset.maxOutputChars ?? DEFAULTS.maxOutputChars,
+    toolTimeoutMs: scopeFromPreset.toolTimeoutMs ?? DEFAULTS.toolTimeoutMs,
     hosts: options.hosts,
     tools,
-    role: options.role ?? DEFAULTS.role,
-    searchEndpoint: pick(env.DSH_SEARCH_ENDPOINT),
+    role: options.role ?? resolved?.role ?? DEFAULTS.role,
+    searchEndpoint: resolved?.searchEndpoint ?? pick(env.DSH_SEARCH_ENDPOINT),
     remoteBin: pick(env.DSH_REMOTE_BIN) ?? DEFAULTS.remoteBin,
+    preset: resolved ? { id: resolved.id, name: resolved.name, role: resolved.role, extraRules: resolved.extraRules } : undefined,
   };
 }
 
@@ -98,6 +115,11 @@ export function createScope(config: CliConfig): Scope {
 
 export function createTools(config: CliConfig): ToolDefinition[] {
   return createToolset(config.tools, { searchEndpoint: config.searchEndpoint });
+}
+
+/** 给 preset 子命令 / TUI 用：加载同一份预设文件，保证和 resolveConfig 看到的是同一份状态 */
+export function loadPresetManager(env: NodeJS.ProcessEnv = process.env): PresetManager {
+  return PresetManager.loadSync(defaultPresetFile(env));
 }
 
 /** 没有密钥就抛错：调用方负责转成可读提示，而不是发出一个注定 401 的请求 */

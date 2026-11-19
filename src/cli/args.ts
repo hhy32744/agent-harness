@@ -29,17 +29,27 @@ export interface RunOptions {
   maxTurns?: number;
   maxToolCalls?: number;
   role?: string;
+  /** 选择预设（覆盖 active）；预设控制人设/工具策略/边界 */
+  preset?: string;
   /** 机器可读输出 */
   json: boolean;
   quiet: boolean;
 }
 
+export type PresetAction =
+  | { action: "list" }
+  | { action: "use" | "on" | "off"; id: string }
+  | { action: "export" }
+  | { action: "import"; file: string };
+
 export type Command =
   | { kind: "chat"; options: RunOptions }
+  | { kind: "tui"; options: RunOptions }
   | { kind: "prompt"; task: string; options: RunOptions }
   | { kind: "read"; url: string; raw: boolean; full: boolean; maxBytes?: number; options: RunOptions }
   | { kind: "doctor"; json: boolean; strict: boolean; options: RunOptions }
   | { kind: "remote"; host: string; prompt?: string; options: RunOptions }
+  | { kind: "preset"; operation: PresetAction; options: RunOptions }
   | { kind: "help" }
   | { kind: "version" };
 
@@ -59,7 +69,9 @@ const VALUE_FLAGS = new Set([
   "max-tool-calls",
   "max-bytes",
   "role",
+  "preset",
   "prompt",
+  "file",
 ]);
 
 interface FlagBag {
@@ -173,6 +185,7 @@ function readOptions(flags: Map<string, string | true>): RunOptions {
     maxTurns: int(flags, "max-turns"),
     maxToolCalls: int(flags, "max-tool-calls"),
     role: str(flags, "role"),
+    preset: str(flags, "preset"),
     json: bool(flags, "json"),
     quiet: bool(flags, "quiet"),
   };
@@ -194,6 +207,48 @@ export function parseArgv(argv: readonly string[]): Command {
     case "repl":
       if (rest.length > 0) throw new UsageError(`chat 不接受位置参数：${rest.join(" ")}`, "要跑一次任务请用 dsh prompt <文本>");
       return { kind: "chat", options };
+
+    case "tui":
+      if (rest.length > 0) throw new UsageError(`tui 不接受位置参数：${rest.join(" ")}`);
+      return { kind: "tui", options };
+
+    case "preset": {
+      const [verb, arg] = rest;
+      let operation: PresetAction;
+      switch (verb) {
+        case undefined:
+        case "list":
+        case "ls":
+          operation = { action: "list" };
+          break;
+        case "use":
+          if (!arg) throw new UsageError("preset use 需要预设 id", "例如 dsh preset use builtin:search-only");
+          operation = { action: "use", id: arg };
+          break;
+        case "on":
+        case "enable":
+          if (!arg) throw new UsageError("preset on 需要预设 id");
+          operation = { action: "on", id: arg };
+          break;
+        case "off":
+        case "disable":
+          if (!arg) throw new UsageError("preset off 需要预设 id");
+          operation = { action: "off", id: arg };
+          break;
+        case "export":
+          operation = { action: "export" };
+          break;
+        case "import": {
+          const file = arg ?? str(flags, "file");
+          if (!file) throw new UsageError("preset import 需要文件路径", "例如 dsh preset import presets.json --file ./list.json");
+          operation = { action: "import", file };
+          break;
+        }
+        default:
+          throw new UsageError(`未知预设操作 ${verb}`, "可用：list / use / on / off / export / import");
+      }
+      return { kind: "preset", operation, options };
+    }
 
     case "prompt": {
       const task = rest.join(" ").trim();
@@ -233,7 +288,7 @@ export function parseArgv(argv: readonly string[]): Command {
       return { kind: "version" };
 
     default:
-      throw new UsageError(`未知子命令 ${head}`, "可用：dsh / dsh prompt / dsh read / dsh doctor / dsh remote");
+      throw new UsageError(`未知子命令 ${head}`, "可用：dsh / dsh tui / dsh preset / dsh prompt / dsh read / dsh doctor / dsh remote");
   }
 }
 
@@ -241,6 +296,8 @@ export const HELP_TEXT = `dsh —— 由大模型驱动的网页爬取 agent
 
 用法：
   dsh                                  启动交互式聊天（多轮，同一会话保留上下文）
+  dsh tui                              终端界面（banner / 工具时间线 / 状态栏 / 会话落盘）
+  dsh preset [list|use <id>|on <id>|off <id>|export|import <file>]  管理智能体预设
   dsh prompt "<任务文本>"               启动一个非交互任务，跑完打印结果
   dsh read <url>                       直接读一个网页并打印正文（不调用模型，不需要 key）
   dsh doctor                           检查 Node / 密钥 / 模型端点 / 目录 / 工具 / SSH
@@ -258,6 +315,7 @@ read 专用参数：
                           （只设 DASHSCOPE_API_KEY 时默认阿里云兼容端点）
   --allow-host <hosts>    抓取主机白名单，逗号分隔，支持 *.example.com；不填则不限
   --tools <names>         限定可用工具，默认 web_search,fetch_url,extract_links,save_markdown
+  --preset <id>           选择预设（人设/工具策略/边界），如 builtin:search-only
   --max-turns <n>         agent 最大轮次，默认 8
   --max-tool-calls <n>    单次任务最大工具调用次数，默认 16
   --json                  输出机器可读 JSON（prompt / read / doctor）
@@ -269,14 +327,18 @@ read 专用参数：
   DSH_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY
                                   模型密钥，按此顺序取第一个；阿里云只需这一个变量
   DSH_BASE_URL / DSH_MODEL        端点与模型
-  DSH_SEARCH_ENDPOINT             web_search 的搜索页地址
+  DSH_SEARCH_ENDPOINT             web_search 的 html 后端搜索页地址（默认必应）
+  DSH_SEARCH_PROVIDER=tavily      web_search 改用 Tavily JSON API（需 DSH_TAVILY_KEY）
+  DSH_TAVILY_KEY                  Tavily API key（仅 tavily 后端用）
+  DSH_HOME                        配置目录，预设存 $DSH_HOME/presets.json，默认 ~/.dsh
+  DSH_PRESET                      默认预设 id（也可用 --preset 覆盖）
   DSH_REMOTE_BIN                  remote 子命令在远端执行的命令名，默认 dsh
 
 示例：
   dsh read https://example.com/                    # 不配 key 也能跑，验网络读取能力
-  dsh read https://example.com/ --raw --max-bytes 4096
-  dsh doctor
+  dsh tui                                          # 启动 TUI，输入任务后看 web-search 时间线
+  dsh preset list                                  # 查看/管理预设
   dsh prompt "搜索 agent 的最新进展，挑 3 条总结" --allow-host api.deepseek.com
   dsh remote 4090 --prompt "查看 GPU 状态并汇总"
-  dsh --allow-host example.com
+  dsh --allow-host example.com --preset builtin:search-only
 `;

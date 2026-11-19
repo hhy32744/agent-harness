@@ -12,12 +12,13 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm test",
-    "test": "tsc && node --test build/tests/core.test.js build/tests/cli.test.js",
+    "test": "tsc && node --test build/tests/core.test.js build/tests/cli.test.js build/tests/features.test.js",
     "dsh": "tsc && node build/src/cli/entry.js",
     "doctor": "tsc && node build/src/cli/entry.js doctor",
     "demo": "tsc && node build/examples/cli.js",
     "demo:fetch": "tsc && node build/examples/fetch-basics.js",
-    "demo:live": "tsc && node build/examples/cli.js --live"
+    "demo:live": "tsc && node build/examples/cli.js --live",
+    "demo:tui": "tsc && node build/examples/tui-demo.js"
   },
   "keywords": ["agent", "harness", "deepseek", "crawler"],
   "author": "hhy",

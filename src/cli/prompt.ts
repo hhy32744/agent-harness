@@ -17,6 +17,8 @@ export interface PromptOptions {
   tools: ToolDefinition[];
   scope: Scope;
   role: string;
+  /** 预设注入的额外规则 */
+  extraRules?: string[];
   name?: string;
   io: { print(line?: string): void };
   /** 打印过程事件，默认 true；--quiet 时关掉 */
@@ -42,6 +44,7 @@ export async function runPromptTask(task: string, opts: PromptOptions): Promise<
       tools: opts.tools,
       scope: opts.scope,
       role: opts.role,
+      extraRules: opts.extraRules,
       name: opts.name ?? "dsh-prompt",
       onEvent: (event) => {
         opts.onEvent?.(event);
