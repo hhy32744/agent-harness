@@ -145,7 +145,7 @@ ssh -- <host> 'dsh prompt ... --allow-host ...'
 
 > 之所以不用"远端 agent 服务 + HTTP 回传"：那需要一个常驻进程、一套鉴权和版本兼容；而 `ssh host cmd` 已经解决了认证与传输，运维成本最低。
 
-## 7. 参数表
+## 8. 参数表
 
 | 参数 | 适用 | 说明 |
 | --- | --- | --- |
@@ -162,7 +162,7 @@ ssh -- <host> 'dsh prompt ... --allow-host ...'
 | `--full` | read | 不截断正文 |
 | `--max-bytes <n>` | read | 读取字节上限，默认 262144 |
 
-## 8. 环境变量
+## 9. 环境变量
 
 | 变量 | 用途 | 默认 |
 | --- | --- | --- |
@@ -184,7 +184,7 @@ dsh prompt "读出 example.com 首页标题" --allow-host example.com
 
 默认值只写在 `src/cli/config.ts` 一处，避免"doctor 检查的"和"实际跑的"不一致。
 
-## 9. `web_search` 为什么默认用必应
+## 10. `web_search` 为什么默认用必应
 
 | 端点 | 结构 | 可达性 |
 | --- | --- | --- |
@@ -201,7 +201,40 @@ DSH_SEARCH_ENDPOINT="https://html.duckduckgo.com/html/" dsh prompt "搜点什么
 
 与作用域的关系需要说清楚：**搜索请求发往固定端点，URL 不由模型控制，因此不走抓取主机白名单**；但 `web_search` 本身仍受工具白名单约束（不想要联网搜索就从 `--tools` 里去掉它）；搜索结果里的页面再用 `fetch_url` 抓时，照常受 `--allow-host` 限制。
 
-## 10. 退出码
+## 11. 省钱指南（学生党）
+
+模型调用按 Token 计费，输入和输出单价不同。几条实测有效的做法：
+
+**1. 用免费额度，并开「用完即停」。** 阿里云百炼新用户开通即赠 **每个模型各 100 万 Token（输入/输出分别计），有效期 90 天**，无需手动领取。在 [百炼控制台](https://bailian.console.aliyun.com/) 可以查剩余额度，并打开「免费额度用完即停」开关 —— 这样即使额度耗尽也不会产生欠费。以本项目的用量，一次「读网页 + 回答」大约 2000–3000 Token，100 万 Token 够跑几百次。
+
+**2. 默认就用便宜模型。** 只设 `DASHSCOPE_API_KEY` 时，本项目默认模型是 `qwen3.7-flash`：实测能正确发起 `tool_calls`，完整网页读取闭环跑通，而价格比 `qwen-plus` 低一个数量级。需要更强的推理时再临时切：
+
+```bash
+DSH_MODEL=qwen-plus dsh prompt "需要多步推理的复杂任务..."
+DSH_MODEL=qwen4-max dsh prompt "..."      # 最强，但更贵且带思维链
+```
+
+**3. 每次跑完看 Token 数。** `dsh prompt` 和交互模式都会打印本次用量，输入/输出分列：
+
+```
+-- completed | 2 轮 | 1 次工具 | 3195ms token=2632（输入 2576 / 输出 56）
+```
+
+`--json` 输出里是 `usage.promptTokens` / `usage.completionTokens` / `usage.totalTokens` 三个字段，可以自己记账。项目不硬编码价格 —— 各渠道报价随时变，对着控制台账单算才准。
+
+**4. 少喂废话，少转轮次。** 成本 ≈ 每轮把全部历史消息重发一遍，所以：
+
+```bash
+dsh prompt "任务" --max-turns 4        # 默认 8，能少则少
+dsh prompt "任务" --tools fetch_url    # 只留需要的工具，缩小 system prompt
+dsh read <url> --max-bytes 4096        # 直读网页不过模型，完全不花钱
+```
+
+其中 `dsh read` 是纯内核能力，**一次模型都不调用**，验证网络读取时用它是零成本的。
+
+> 价格参考（2026-11，公开资料，以官方账单为准）：Flash 系列约 ¥0.8/百万输入、¥2/百万输出，Plus 系列约 ¥0.96–4.8/百万输入、¥2.4–4.8/百万输出；Batch 调用通常半价。免费额度本身不区分模型档位。
+
+## 12. 退出码
 
 | 码 | 含义 |
 | --- | --- |
@@ -209,7 +242,7 @@ DSH_SEARCH_ENDPOINT="https://html.duckduckgo.com/html/" dsh prompt "搜点什么
 | 1 | 任务未完成（`max_turns` / `tool_budget` / `error`）；doctor 有 fail；`read` 非 2xx 或被白名单拒绝 |
 | 2 | 用法错误：未知子命令、缺任务文本、缺 URL、未知参数、缺少模型密钥 |
 
-## 11. 已知限制
+## 12. 已知限制
 
 - 交互模式没有流式输出：模型整段返回后再打印（`OpenAICompatibleClient` 目前是 `stream: false`）。
 - 会话不持久化：`dsh` 退出后上下文即丢弃；续跑要自己用 `runAgentLoop` + 现成 `Session`。

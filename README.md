@@ -270,7 +270,7 @@ console.log(result.status, result.turns, result.text);
 | 文档 | 内容 |
 | --- | --- |
 | [README.md](README.md) | 项目目标、快速开始、命令行、结构、现状与路线图 |
-| [docs/cli.md](docs/cli.md) | `dsh` 五个子命令、参数与环境变量、`web_search` 端点选择、退出码 |
+| [docs/cli.md](docs/cli.md) | `dsh` 五个子命令、参数与环境变量、`web_search` 端点选择、退出码、省钱指南 |
 | [docs/architecture.md](docs/architecture.md) | 分层、数据流、四个设计决定、失败路径、扩展点、编译布局 |
 | [docs/fetch-baseline.md](docs/fetch-baseline.md) | 底层 `fetch` 的运行时事实、实测结论与内核代码对应 |
 | [docs/contributing.md](docs/contributing.md) | 目录规则、commit 规范、环境变量、结构演进 |
@@ -281,7 +281,7 @@ console.log(result.status, result.turns, result.text);
 | --- | --- |
 | Node.js | ≥ 18（内置 fetch），实测 18.20.8 / 22.22.2 |
 | TypeScript | `^5.6`（devDependency，锁文件固定 5.9.3） |
-| 真实模型 | DeepSeek `deepseek-chat` 或阿里云 `qwen-plus`（只设 `DASHSCOPE_API_KEY` 时自动切换），OpenAI 兼容协议 |
+| 真实模型 | DeepSeek `deepseek-chat` 或阿里云 `qwen3.7-flash`（只设 `DASHSCOPE_API_KEY` 时自动切换，默认用便宜的 Flash），OpenAI 兼容协议 |
 | 可选覆盖 | `DSH_MODEL` / `DEEPSEEK_MODEL`、`DSH_BASE_URL` / `DEEPSEEK_BASE_URL`、`DSH_API_KEY` / `DASHSCOPE_API_KEY`、`DSH_SEARCH_ENDPOINT`、`DSH_REMOTE_BIN` |
 
 **提交约定**：一个主题一个 commit，用 `feat:` / `fix:` / `docs:` / `chore:` / `refactor:` / `test:` 前缀写清「改了什么、为什么」；不提交 `node_modules/`、`build/`、`out/`、`.env`，API key 只从环境变量读。详见 [开发与提交约定](docs/contributing.md)。

@@ -52,9 +52,11 @@ export function formatEvent(event: SessionEvent): string | null {
 
 /** 一次任务的一行摘要，交互模式和 prompt 模式都用它收尾 */
 export function formatSummary(result: LoopResult, elapsedMs: number): string {
+  const { promptTokens, completionTokens, totalTokens } = result.usage;
+  // 输入/输出单价不同，分开打印方便对照账单；未知时退回总数
   const usage =
-    result.usage.totalTokens > 0
-      ? ` token=${result.usage.totalTokens}`
+    totalTokens > 0
+      ? ` token=${totalTokens}（输入 ${promptTokens} / 输出 ${completionTokens}）`
       : "";
   return `-- ${result.status} | ${result.turns} 轮 | ${result.toolCalls} 次工具 | ${elapsedMs}ms${usage}`;
 }

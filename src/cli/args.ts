@@ -253,7 +253,7 @@ read 专用参数：
 
 通用参数：
   --model <name>          模型名，默认取 DSH_MODEL / DEEPSEEK_MODEL，再退到 deepseek-chat
-                          （只设 DASHSCOPE_API_KEY 时默认 qwen-plus）
+                          （只设 DASHSCOPE_API_KEY 时默认便宜的 qwen3.7-flash）
   --base-url <url>        OpenAI 兼容端点，默认 https://api.deepseek.com
                           （只设 DASHSCOPE_API_KEY 时默认阿里云兼容端点）
   --allow-host <hosts>    抓取主机白名单，逗号分隔，支持 *.example.com；不填则不限

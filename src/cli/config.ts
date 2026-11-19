@@ -41,10 +41,14 @@ const DEFAULTS = {
   remoteBin: "dsh",
 } as const;
 
-/** 阿里云灵积的 OpenAI 兼容模式：只需一个 key，端点与默认模型自动推导 */
+/**
+ * 阿里云灵积的 OpenAI 兼容模式：只需一个 key，端点与默认模型自动推导。
+ * 默认选 Flash 而非 Plus：实测同样能正确发起 tool_calls，价格低一个数量级；
+ * qwen-plus / qwen4-max 可用 DSH_MODEL 或 --model 随时切回。
+ */
 const DASHSCOPE_DEFAULTS = {
   baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  model: "qwen-plus",
+  model: "qwen3.7-flash",
 } as const;
 
 export function resolveConfig(options: RunOptions, env: NodeJS.ProcessEnv = process.env): CliConfig {

@@ -186,7 +186,7 @@ test("只设 DASHSCOPE_API_KEY 时自动推导端点与模型", () => {
   const config = resolveConfig({ hosts: [], json: false, quiet: false }, { DASHSCOPE_API_KEY: "sk-dash" });
   assert.equal(config.apiKey, "sk-dash");
   assert.equal(config.baseUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1");
-  assert.equal(config.model, "qwen-plus");
+  assert.equal(config.model, "qwen3.7-flash");
 
   // 显式指定仍然最高优先级
   const explicit = resolveConfig(
@@ -199,7 +199,7 @@ test("只设 DASHSCOPE_API_KEY 时自动推导端点与模型", () => {
 
 test("多个密钥并存时 DASHSCOPE 兜底，不抢已有 provider 的默认值", () => {
   const dashOnly = resolveConfig({ hosts: [], json: false, quiet: false }, { DASHSCOPE_API_KEY: "sk-dash" });
-  assert.equal(dashOnly.model, "qwen-plus");
+  assert.equal(dashOnly.model, "qwen3.7-flash");
 
   const withDeepseek = resolveConfig(
     { hosts: [], json: false, quiet: false },
