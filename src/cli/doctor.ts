@@ -99,7 +99,7 @@ function checkApiKey(apiKey: string | undefined): DoctorCheck {
     return {
       name: "模型密钥",
       status: "warn",
-      detail: "未设置 DSH_API_KEY / DEEPSEEK_API_KEY —— 交互与 prompt 子命令需要它",
+      detail: "未设置 DSH_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY —— 交互与 prompt 子命令需要它",
     };
   }
   return { name: "模型密钥", status: "ok", detail: mask(apiKey) };

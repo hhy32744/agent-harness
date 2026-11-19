@@ -166,13 +166,23 @@ ssh -- <host> 'dsh prompt ... --allow-host ...'
 
 | 变量 | 用途 | 默认 |
 | --- | --- | --- |
-| `DSH_API_KEY` / `DEEPSEEK_API_KEY` | 模型密钥（前者优先） | 无，`prompt`/`chat` 必需 |
+| `DSH_API_KEY` / `DEEPSEEK_API_KEY` / `DASHSCOPE_API_KEY` | 模型密钥，按此顺序取第一个 | 无，`prompt`/`chat` 必需 |
 | `DSH_BASE_URL` / `DEEPSEEK_BASE_URL` | OpenAI 兼容端点 | `https://api.deepseek.com` |
 | `DSH_MODEL` / `DEEPSEEK_MODEL` | 模型名 | `deepseek-chat` |
 | `DSH_SEARCH_ENDPOINT` | `web_search` 的搜索页地址 | `https://www.bing.com/search` |
 | `DSH_REMOTE_BIN` | `remote` 在远端执行的命令 | `dsh` |
 
-优先级：**命令行 > `DSH_*` > `DEEPSEEK_*` > 内置默认**。默认值只写在 `src/cli/config.ts` 一处，避免"doctor 检查的"和"实际跑的"不一致。
+优先级：**命令行 > `DSH_*` > `DEEPSEEK_*` > 内置默认**。`DASHSCOPE_API_KEY` 作为密钥兜底参与第一项，且当它是唯一密钥时，端点与默认模型自动切到阿里云：
+
+```bash
+export DASHSCOPE_API_KEY=sk-...     # 只此一个变量即可
+dsh doctor                         # 端点自动为 dashscope 兼容地址，模型 qwen-plus
+dsh prompt "读出 example.com 首页标题" --allow-host example.com
+```
+
+这样做是为了兼容两种常见情况：只拿得到阿里云 key 的人不用背端点和模型名；已经有 DeepSeek key 的人行为完全不变 —— 只要存在 `DSH_*` 或 `DEEPSEEK_*` 密钥，就仍走原来的默认端点与模型。显式传 `--model` / `--base-url` 或 `DSH_MODEL` / `DSH_BASE_URL` 永远最高优先。
+
+默认值只写在 `src/cli/config.ts` 一处，避免"doctor 检查的"和"实际跑的"不一致。
 
 ## 9. `web_search` 为什么默认用必应
 

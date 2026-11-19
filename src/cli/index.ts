@@ -92,7 +92,7 @@ function assemble(options: RunOptions, env: NodeJS.ProcessEnv, io: CliIO): Assem
   } catch (err) {
     if (err instanceof MissingApiKeyError) {
       io.err(`dsh: ${err.message}`);
-      io.err("提示：先跑 dsh doctor 看环境，或 export DSH_API_KEY=sk-...");
+      io.err("提示：先跑 dsh doctor 看环境，或 export DSH_API_KEY=sk-...（也可用 DASHSCOPE_API_KEY）");
       return EXIT_USAGE;
     }
     io.err(`dsh: 配置有误：${err instanceof Error ? err.message : String(err)}`);

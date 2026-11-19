@@ -182,6 +182,41 @@ test("配置优先级：命令行 > DSH_* > DEEPSEEK_* > 默认", () => {
   assert.equal(overridden.model, "cli-model");
 });
 
+test("只设 DASHSCOPE_API_KEY 时自动推导端点与模型", () => {
+  const config = resolveConfig({ hosts: [], json: false, quiet: false }, { DASHSCOPE_API_KEY: "sk-dash" });
+  assert.equal(config.apiKey, "sk-dash");
+  assert.equal(config.baseUrl, "https://dashscope.aliyuncs.com/compatible-mode/v1");
+  assert.equal(config.model, "qwen-plus");
+
+  // 显式指定仍然最高优先级
+  const explicit = resolveConfig(
+    { hosts: [], json: false, quiet: false, model: "qwen-max", baseUrl: "https://my-proxy/v1" },
+    { DASHSCOPE_API_KEY: "sk-dash" },
+  );
+  assert.equal(explicit.model, "qwen-max");
+  assert.equal(explicit.baseUrl, "https://my-proxy/v1");
+});
+
+test("多个密钥并存时 DASHSCOPE 兜底，不抢已有 provider 的默认值", () => {
+  const dashOnly = resolveConfig({ hosts: [], json: false, quiet: false }, { DASHSCOPE_API_KEY: "sk-dash" });
+  assert.equal(dashOnly.model, "qwen-plus");
+
+  const withDeepseek = resolveConfig(
+    { hosts: [], json: false, quiet: false },
+    { DASHSCOPE_API_KEY: "sk-dash", DEEPSEEK_API_KEY: "sk-ds" },
+  );
+  assert.equal(withDeepseek.apiKey, "sk-ds");
+  assert.equal(withDeepseek.baseUrl, "https://api.deepseek.com");
+  assert.equal(withDeepseek.model, "deepseek-chat");
+
+  const withDsh = resolveConfig(
+    { hosts: [], json: false, quiet: false },
+    { DASHSCOPE_API_KEY: "sk-dash", DSH_API_KEY: "sk-dsh" },
+  );
+  assert.equal(withDsh.apiKey, "sk-dsh");
+  assert.equal(withDsh.model, "deepseek-chat");
+});
+
 // ===== 交互会话 =====
 
 function fakeIO(lines: string[]) {

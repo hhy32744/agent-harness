@@ -41,12 +41,26 @@ const DEFAULTS = {
   remoteBin: "dsh",
 } as const;
 
+/** 阿里云灵积的 OpenAI 兼容模式：只需一个 key，端点与默认模型自动推导 */
+const DASHSCOPE_DEFAULTS = {
+  baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  model: "qwen-plus",
+} as const;
+
 export function resolveConfig(options: RunOptions, env: NodeJS.ProcessEnv = process.env): CliConfig {
   const tools = (options.tools && options.tools.length > 0 ? options.tools : [...DEFAULT_TOOL_NAMES]).map((t) => t.trim());
+  const apiKey = pick(env.DSH_API_KEY, env.DEEPSEEK_API_KEY, env.DASHSCOPE_API_KEY);
+
+  // 只有当密钥确实来自 DashScope（没有更高优先级的 key）时，才切换默认端点与模型。
+  // 显式指定的 DSH_* / DEEPSEEK_* 以及命令行参数仍然优先，下面照常覆盖。
+  const fromDashscope = apiKey !== undefined && pick(env.DSH_API_KEY, env.DEEPSEEK_API_KEY) === undefined;
+  const defaultBaseUrl = fromDashscope ? DASHSCOPE_DEFAULTS.baseUrl : DEFAULTS.baseUrl;
+  const defaultModel = fromDashscope ? DASHSCOPE_DEFAULTS.model : DEFAULTS.model;
+
   return {
-    apiKey: pick(env.DSH_API_KEY, env.DEEPSEEK_API_KEY),
-    baseUrl: options.baseUrl ?? pick(env.DSH_BASE_URL, env.DEEPSEEK_BASE_URL) ?? DEFAULTS.baseUrl,
-    model: options.model ?? pick(env.DSH_MODEL, env.DEEPSEEK_MODEL) ?? DEFAULTS.model,
+    apiKey,
+    baseUrl: options.baseUrl ?? pick(env.DSH_BASE_URL, env.DEEPSEEK_BASE_URL) ?? defaultBaseUrl,
+    model: options.model ?? pick(env.DSH_MODEL, env.DEEPSEEK_MODEL) ?? defaultModel,
     maxTurns: options.maxTurns ?? DEFAULTS.maxTurns,
     maxToolCalls: options.maxToolCalls ?? DEFAULTS.maxToolCalls,
     maxOutputChars: DEFAULTS.maxOutputChars,

@@ -253,7 +253,9 @@ read 专用参数：
 
 通用参数：
   --model <name>          模型名，默认取 DSH_MODEL / DEEPSEEK_MODEL，再退到 deepseek-chat
+                          （只设 DASHSCOPE_API_KEY 时默认 qwen-plus）
   --base-url <url>        OpenAI 兼容端点，默认 https://api.deepseek.com
+                          （只设 DASHSCOPE_API_KEY 时默认阿里云兼容端点）
   --allow-host <hosts>    抓取主机白名单，逗号分隔，支持 *.example.com；不填则不限
   --tools <names>         限定可用工具，默认 web_search,fetch_url,extract_links,save_markdown
   --max-turns <n>         agent 最大轮次，默认 8
@@ -264,7 +266,8 @@ read 专用参数：
   -v, --version           显示版本
 
 环境变量：
-  DSH_API_KEY / DEEPSEEK_API_KEY  模型密钥（二者都可，前者优先）
+  DSH_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY
+                                  模型密钥，按此顺序取第一个；阿里云只需这一个变量
   DSH_BASE_URL / DSH_MODEL        端点与模型
   DSH_SEARCH_ENDPOINT             web_search 的搜索页地址
   DSH_REMOTE_BIN                  remote 子命令在远端执行的命令名，默认 dsh
