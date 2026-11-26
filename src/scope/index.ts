@@ -33,7 +33,7 @@ export interface CheckResult {
 }
 
 const DEFAULT_POLICY: ScopePolicy = {
-  maxTurns: 8,
+  maxTurns: 4,
   maxToolCalls: 16,
   maxOutputChars: 8000,
   toolTimeoutMs: 15000,
@@ -51,7 +51,7 @@ export class Scope {
     return new Scope({
       allowedTools: ["fetch_url", "extract_links", "save_markdown"],
       allowedHosts: hosts,
-      maxTurns: 8,
+      maxTurns: 4,
       maxToolCalls: 12,
       maxOutputChars: 6000,
       toolTimeoutMs: 10000,

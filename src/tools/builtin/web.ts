@@ -57,6 +57,22 @@ export const fetchUrlTool: ToolDefinition = {
       ms: Date.now() - started,
     });
 
+    // 失败（4xx/5xx）时只回状态码和简短原因，不回填整页 HTML：
+    // 错误页正文对模型没有价值，还会灌一大坨噪声，拖慢收敛、浪费 token。
+    if (!resp.ok) {
+      return {
+        content: JSON.stringify({
+          url: finalUrl.toString(),
+          status: resp.status,
+          statusText: resp.statusText,
+          contentType: resp.headers.get("content-type") ?? "",
+          bytes: buf.byteLength,
+          hint: `抓取失败（HTTP ${resp.status}）。可尝试换一个 URL，或直接用已搜到的信息作答。`,
+        }),
+        isError: true,
+      };
+    }
+
     return {
       content: JSON.stringify({
         url: finalUrl.toString(),
@@ -66,7 +82,7 @@ export const fetchUrlTool: ToolDefinition = {
         truncated,
         html: body,
       }),
-      isError: !resp.ok,
+      isError: false,
     };
   },
 };

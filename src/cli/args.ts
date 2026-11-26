@@ -310,13 +310,13 @@ read 专用参数：
 
 通用参数：
   --model <name>          模型名，默认取 DSH_MODEL / DEEPSEEK_MODEL，再退到 deepseek-chat
-                          （只设 DASHSCOPE_API_KEY 时默认便宜的 qwen3.7-flash）
+                          （只设 DASHSCOPE_API_KEY 时默认便宜的 qwen3.6-flash）
   --base-url <url>        OpenAI 兼容端点，默认 https://api.deepseek.com
                           （只设 DASHSCOPE_API_KEY 时默认阿里云兼容端点）
   --allow-host <hosts>    抓取主机白名单，逗号分隔，支持 *.example.com；不填则不限
   --tools <names>         限定可用工具，默认 web_search,fetch_url,extract_links,save_markdown
   --preset <id>           选择预设（人设/工具策略/边界），如 builtin:search-only
-  --max-turns <n>         agent 最大轮次，默认 8
+  --max-turns <n>         agent 最大轮次，默认 4
   --max-tool-calls <n>    单次任务最大工具调用次数，默认 16
   --json                  输出机器可读 JSON（prompt / read / doctor）
   --quiet                 只打印最终结果，不打印过程事件

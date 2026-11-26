@@ -41,7 +41,7 @@ export interface CliConfig {
 const DEFAULTS = {
   baseUrl: "https://api.deepseek.com",
   model: "deepseek-chat",
-  maxTurns: 8,
+  maxTurns: 4,
   maxToolCalls: 16,
   maxOutputChars: 6000,
   toolTimeoutMs: 15000,
@@ -51,12 +51,18 @@ const DEFAULTS = {
 
 /**
  * 阿里云灵积的 OpenAI 兼容模式：只需一个 key，端点与默认模型自动推导。
- * 默认选 Flash 而非 Plus：实测同样能正确发起 tool_calls，价格低一个数量级；
+ * 默认选 Flash 而非 Plus：实测同样能正确发起 tool_calls，价格低一个数量级。
+ *
+ * 2026-11-26 实测（同一「搜特朗普政策」任务）：
+ *   - qwen3.7-flash：连搜 8 轮不收敛，上下文堆爆后兜底请求 60s 超时（67s 空手而归）
+ *   - qwen3.6-flash：4 轮收敛出答案，约 20s，flash 档便宜
+ *   - qwen-plus：4 轮收敛、答案最完整，约 18s，但贵一个数量级
+ * 故默认改用 qwen3.6-flash：便宜 + 收敛快 + 不超时，性价比最优。
  * qwen-plus / qwen4-max 可用 DSH_MODEL 或 --model 随时切回。
  */
 const DASHSCOPE_DEFAULTS = {
   baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  model: "qwen3.7-flash",
+  model: "qwen3.6-flash",
 } as const;
 
 export function resolveConfig(options: RunOptions, env: NodeJS.ProcessEnv = process.env): CliConfig {

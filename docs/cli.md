@@ -107,7 +107,7 @@ dsh prompt "把 example.com 的入口链接抓下来" --allow-host example.com -
 [ok  ] 工具集：4 个：web_search, fetch_url, extract_links, save_markdown
 [ok  ] 搜索端点：HTTP 200（https://www.bing.com/search）
 [ok  ] SSH 主机：6 个：node03, 192.168.200.130, ...
-[ok  ] 运行参数：model=deepseek-chat 主机白名单=未限制 轮次<=8 工具<=16
+[ok  ] 运行参数：model=deepseek-chat 主机白名单=未限制 轮次<=4 工具<=16
 
 结果：6 通过 / 2 警告 / 0 失败
 ```
@@ -155,7 +155,7 @@ ssh -- <host> 'dsh prompt ... --allow-host ...'
 | `--base-url <url>` | 全部 | OpenAI 兼容端点，默认 `https://api.deepseek.com` |
 | `--allow-host <hosts>` | 全部 | 抓取主机白名单，逗号分隔，支持 `*.example.com`；也接受整条 URL（自动取主机名） |
 | `--tools <names>` | 全部 | 默认 `web_search,fetch_url,extract_links,save_markdown` |
-| `--max-turns <n>` | 全部 | agent 最大轮次，默认 8 |
+| `--max-turns <n>` | 全部 | agent 最大轮次，默认 4 |
 | `--max-tool-calls <n>` | 全部 | 单次任务工具调用上限，默认 16 |
 | `--json` | prompt / read / doctor | 机器可读输出 |
 | `--quiet` | 全部 | 不打印过程事件，只给结果 |
@@ -227,7 +227,7 @@ DSH_MODEL=qwen4-max dsh prompt "..."      # 最强，但更贵且带思维链
 **4. 少喂废话，少转轮次。** 成本 ≈ 每轮把全部历史消息重发一遍，所以：
 
 ```bash
-dsh prompt "任务" --max-turns 4        # 默认 8，能少则少
+dsh prompt "任务" --max-turns 4        # 默认 4，能少则少
 dsh prompt "任务" --tools fetch_url    # 只留需要的工具，缩小 system prompt
 dsh read <url> --max-bytes 4096        # 直读网页不过模型，完全不花钱
 ```

@@ -15,7 +15,7 @@ import type { ToolDefinition } from "../tools/types";
 export interface AgentOptions {
   llm: LLMClient;
   tools: ToolDefinition[];
-  /** 不传则用默认策略（8 轮 / 16 次工具调用） */
+  /** 不传则用默认策略（4 轮 / 16 次工具调用） */
   scope?: Scope;
   /** 角色描述，用于自动生成系统提示词 */
   role?: string;
