@@ -72,13 +72,13 @@ export function parseTavilyJson(json: unknown, limit: number): SearchHit[] {
  *   DDG  -> <a class="result__a" href="//duckduckgo.com/l/?uddg=…">
  * 两个都认不出来就返回空数组，由工具层给出"可能被反爬"的可读错误。
  */
-export function parseSearchHtml(html: string, limit = 8): SearchHit[] {
+export function parseSearchHtml(html: string, limit = 5): SearchHit[] {
   if (/class="[^"]*\bb_algo\b/.test(html)) return parseBingHtml(html, limit);
   return parseDuckDuckGoHtml(html, limit);
 }
 
 /** 解析必应结果页：标题在 h2>a，摘要在 <p class="b_lineclamp…"> */
-export function parseBingHtml(html: string, limit = 8): SearchHit[] {
+export function parseBingHtml(html: string, limit = 5): SearchHit[] {
   const anchorRe = /<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   const snippetRe = /<p\b[^>]*class="[^"]*\bb_(?:lineclamp|algoSlug)\w*[^"]*"[^>]*>([\s\S]*?)<\/p>/gi;
 
@@ -104,7 +104,7 @@ export function parseBingHtml(html: string, limit = 8): SearchHit[] {
  * 结构：<a class="result__a" href="//duckduckgo.com/l/?uddg=<encoded>">标题</a>
  *       <a class="result__snippet">摘要</a>
  */
-export function parseDuckDuckGoHtml(html: string, limit = 8): SearchHit[] {
+export function parseDuckDuckGoHtml(html: string, limit = 5): SearchHit[] {
   const anchorRe = /<a\b[^>]*class="[^"]*\bresult__a\b[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   const snippetRe = /class="[^"]*\bresult__snippet\b[^"]*"[^>]*>([\s\S]*?)<\/(?:a|div|td)>/gi;
 
@@ -210,14 +210,14 @@ export function createWebSearchTool(options: WebSearchOptions = {}): ToolDefinit
       type: "object",
       properties: {
         query: { type: "string", description: "搜索关键词，2~200 字符" },
-        limit: { type: "number", description: "返回条数，默认 8，最大 20" },
+        limit: { type: "number", description: "返回条数，默认 5，最大 20" },
       },
       required: ["query"],
       additionalProperties: false,
     },
     async run(input, ctx): Promise<ToolResult> {
       const query = readString(input, "query").slice(0, 200);
-      const limit = clampNumber(readNumber(input, "limit", 8), 1, 20);
+      const limit = clampNumber(readNumber(input, "limit", 5), 1, 20);
       const started = Date.now();
       ctx.logger("search.start", { query, limit, endpoint: backend, provider });
 

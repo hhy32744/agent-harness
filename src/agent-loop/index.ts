@@ -143,8 +143,34 @@ export async function runAgentLoop(deps: LoopDeps): Promise<LoopResult> {
     }
 
     emit("turn.limit", { reason: "max_turns", maxTurns }, turns);
+    // 兜底：预算耗尽前给模型一次"不带工具、只用已有信息作答"的机会。
+    // 否则它若一直在调工具，最后一轮的 content 是空串，用户只会看到"没有文本答复"。
+    const lastChance = await llm.chat({
+      messages: [
+        ...session.messages,
+        {
+          role: "system",
+          content:
+            "工具预算已用尽。请停止调用任何工具，直接用你已经搜到的信息，简洁地回答用户最初的问题。",
+        },
+      ],
+      tools: [],
+      signal,
+    });
+    session.append(lastChance);
+    usage = addUsage(usage, lastChance.usage);
+    emit(
+      "assistant.message",
+      {
+        turn: turns + 1,
+        chars: lastChance.content.length,
+        toolCalls: 0,
+        preview: lastChance.content.slice(0, 120),
+      },
+      turns + 1,
+    );
     emit("session.end", { status: "max_turns", turns, toolCalls: toolCallsUsed }, turns);
-    return { status: "max_turns", text: lastText, turns, toolCalls: toolCallsUsed, usage };
+    return { status: "max_turns", text: lastChance.content || lastText, turns, toolCalls: toolCallsUsed, usage };
   } catch (err) {
     const message = describeError(err);
     emit("error", { message }, turns);
