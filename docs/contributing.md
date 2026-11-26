@@ -27,7 +27,7 @@
 | 变量 | 用途 | 是否必需 |
 | --- | --- | --- |
 | `DEEPSEEK_API_KEY` / `DSH_API_KEY` / `DASHSCOPE_API_KEY` | 真实模型调用 | `npm run demo:live`、`dsh`、`dsh prompt` 需要；阿里云 key 单独使用时自动配好端点与模型 |
-| `DEEPSEEK_MODEL` / `DSH_MODEL` | 覆盖默认模型 `deepseek-chat`（阿里云为便宜的 `qwen3.7-flash`） | 可选 |
+| `DEEPSEEK_MODEL` / `DSH_MODEL` | 覆盖默认模型 `deepseek-chat`（阿里云为便宜的 `qwen3.6-flash`） | 可选 |
 | `DEEPSEEK_BASE_URL` / `DSH_BASE_URL` | 覆盖 OpenAI 兼容端点 | 可选 |
 | `DSH_SEARCH_ENDPOINT` | `web_search` 的搜索页地址 | 可选，默认必应 |
 | `DSH_REMOTE_BIN` | `dsh remote` 在远端执行的命令名 | 可选，默认 `dsh` |
@@ -56,7 +56,7 @@
 npm run typecheck   # 只做类型检查，不产出文件
 npm run build       # tsc → build/
 npm ci              # 全新克隆后第一次安装（严格按锁文件）
-npm test            # 编译 + 49 个用例
+npm test            # 编译 + 70 个用例
 npm run demo        # 离线完整闭环
 npm run demo:fetch  # 底层抓取能力自检
 npm run verify      # 类型检查 + 测试

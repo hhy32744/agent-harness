@@ -209,7 +209,7 @@ DSH_SEARCH_ENDPOINT="https://html.duckduckgo.com/html/" dsh prompt "搜点什么
 
 **1. 用免费额度，并开「用完即停」。** 阿里云百炼新用户开通即赠 **每个模型各 100 万 Token（输入/输出分别计），有效期 90 天**，无需手动领取。在 [百炼控制台](https://bailian.console.aliyun.com/) 可以查剩余额度，并打开「免费额度用完即停」开关 —— 这样即使额度耗尽也不会产生欠费。以本项目的用量，一次「读网页 + 回答」大约 2000–3000 Token，100 万 Token 够跑几百次。
 
-**2. 默认就用便宜模型。** 只设 `DASHSCOPE_API_KEY` 时，本项目默认模型是 `qwen3.7-flash`：实测能正确发起 `tool_calls`，完整网页读取闭环跑通，而价格比 `qwen-plus` 低一个数量级。需要更强的推理时再临时切：
+**2. 默认就用便宜模型。** 只设 `DASHSCOPE_API_KEY` 时，本项目默认模型是 `qwen3.6-flash`：实测能正确发起 `tool_calls`、收敛快（约 25s 出答案，`qwen3.7-flash` 会磨蹭到超时），而价格比 `qwen-plus` 低一个数量级。需要更强的推理时再临时切：
 
 ```bash
 DSH_MODEL=qwen-plus dsh prompt "需要多步推理的复杂任务..."

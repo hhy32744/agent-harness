@@ -56,7 +56,7 @@
 git clone git@github.com:hhy32744/agent-harness.git
 cd agent-harness
 npm ci
-npm test          # 49 个用例，覆盖主循环全部退出路径、真实模型适配器、CLI 与网络读取
+npm test          # 70 个用例，覆盖主循环全部退出路径、真实模型适配器、CLI 与网络读取
 npm run demo      # 离线端到端闭环：脚本模型 + 本地 mock 站点
 ```
 
@@ -84,7 +84,7 @@ DEEPSEEK_API_KEY=sk-xxx npm run demo:live
 | `npm run build` | `tsc` 编译到 `build/` |
 | `npm run typecheck` | 只做类型检查，不产出文件 |
 | `npm run verify` | 类型检查 + 全量测试 |
-| `npm test` | 编译 + 运行 49 个用例 |
+| `npm test` | 编译 + 运行 70 个用例 |
 | `npm run dsh` | 编译后启动 `dsh`（不带参数即交互聊天） |
 | `npm run doctor` | 编译后跑一次环境与配置检查 |
 | `npm run demo` | 离线端到端闭环 |
@@ -169,7 +169,7 @@ agent-harness/
 │  ├─ cli.ts                   端到端闭环（demo / demo:live）
 │  ├─ mock-site.ts             本地 mock 站点
 │  └─ fetch-basics.ts          底层抓取能力自检（demo:fetch）
-├─ tests/                       ← 49 个用例（core 19 + cli 30）
+├─ tests/                       ← 70 个用例（core 19 + cli 30 + features 21）
 ├─ scripts/setup.sh            ← Linux 一键装环境与自检
 ├─ docs/                       ← 架构、命令行、底层能力、开发约定
 ├─ .github/workflows/ci.yml    ← 多平台自动验证
@@ -281,7 +281,7 @@ console.log(result.status, result.turns, result.text);
 | --- | --- |
 | Node.js | ≥ 18（内置 fetch），实测 18.20.8 / 22.22.2 |
 | TypeScript | `^5.6`（devDependency，锁文件固定 5.9.3） |
-| 真实模型 | DeepSeek `deepseek-chat` 或阿里云 `qwen3.7-flash`（只设 `DASHSCOPE_API_KEY` 时自动切换，默认用便宜的 Flash），OpenAI 兼容协议 |
+| 真实模型 | DeepSeek `deepseek-chat` 或阿里云 `qwen3.6-flash`（只设 `DASHSCOPE_API_KEY` 时自动切换，默认用便宜的 Flash），OpenAI 兼容协议 |
 | 可选覆盖 | `DSH_MODEL` / `DEEPSEEK_MODEL`、`DSH_BASE_URL` / `DEEPSEEK_BASE_URL`、`DSH_API_KEY` / `DASHSCOPE_API_KEY`、`DSH_SEARCH_ENDPOINT`、`DSH_REMOTE_BIN` |
 
 **提交约定**：一个主题一个 commit，用 `feat:` / `fix:` / `docs:` / `chore:` / `refactor:` / `test:` 前缀写清「改了什么、为什么」；不提交 `node_modules/`、`build/`、`out/`、`.env`，API key 只从环境变量读。详见 [开发与提交约定](docs/contributing.md)。
